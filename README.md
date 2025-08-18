@@ -1,7 +1,4 @@
-# 📌 Draft README
-
-```markdown
-# 🚀 Auto Labeling Tweets dengan Gemini
+# 📌 Auto Labeling Tweets dengan Gemini
 
 Proyek ini merupakan sistem **pelabelan otomatis** untuk dataset teks (misalnya tweet) menggunakan **Google Gemini API**.  
 Label yang dihasilkan meliputi kategori sentimen dan relevansi:
@@ -27,15 +24,10 @@ Hasil labeling akan otomatis tersimpan dalam file Excel (`.xlsx`) dengan **check
 ---
 
 ## 📂 Struktur Direktori
-```
 
-.
+```
 ├── dataset/ # Folder dataset input (Excel .xlsx)
 │ └── tweets_dataset.xlsx
-
-<!-- ├── logs/ # Folder untuk menyimpan log proses
-│ └── tweets_dataset_labeled.xlsx -->
-
 ├── prompt/ # Folder untuk menyimpan prompt
 │ └── tweets_dataset_labeled.xlsx
 ├── results/ # Folder output hasil labeling
@@ -43,17 +35,18 @@ Hasil labeling akan otomatis tersimpan dalam file Excel (`.xlsx`) dengan **check
 ├── labeling.py # Script utama
 ├── requirements.txt # Dependency Python
 └── README.md # Dokumentasi project
-
-````
+```
 
 ---
 
 ## ⚙️ Instalasi & Setup
+
 1. Clone repository:
+
    ```bash
    git clone https://github.com/username/auto-labeling-aistudio.git
    cd auto-labeling-aistudio
-````
+   ```
 
 2. Buat virtual environment python
 
@@ -76,7 +69,7 @@ Hasil labeling akan otomatis tersimpan dalam file Excel (`.xlsx`) dengan **check
 5. Siapkan folder dataset dan letakkan file Excel (`.xlsx`) di dalamnya.
    Contoh: `dataset/tweets_dataset.xlsx`
 
-6. Buat file .env dan atur **Google Gemini API Key** di environment:
+6. Buat file .env dan atur **Google Gemini API Key**:
 
    ```bash
    GOOGLE_API_KEY="your_api_key_here"
@@ -108,15 +101,21 @@ Output akan tersimpan di folder `results/` dengan nama:
 
 ## 📖 Dokumentasi Fungsi
 
-### `genai_generate(prompt, temperature=1.0, top_p=1.0, top_k=40)`
+```python
+genai_generate(prompt, temperature=1.0, top_p=1.0, top_k=40)
+```
 
 Mengirim prompt ke Gemini dan mengembalikan hasil dalam bentuk list string.
 
-### `open_dataset(path)`
+```python
+open_dataset(path)
+```
 
 Membuka dataset Excel (`.xlsx`) dan mengembalikan DataFrame pandas.
 
-### `labeling(df_path, batch_size=300, temperature=1.0, top_p=1.0, top_k=40, max_retry=3)`
+```python
+labeling(df_path, batch_size=300, temperature=1.0, top_p=1.0, top_k=40, max_retry=3)
+```
 
 Melakukan labeling otomatis terhadap dataset teks, menyimpan hasil ke Excel dengan checkpoint.
 
