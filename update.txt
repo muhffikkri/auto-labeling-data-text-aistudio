@@ -1,0 +1,11 @@
+/dataset dan /results akan masuk gitignore jadi di readme tambahin untuk buat folder dataset untuk simpen dataset nya data yang udah dikerjain setengah dan masuk ke folder dataset harus bisa dicek baris label yang masih kosong dan lanjut ngerjain dari situ, kalo baris yang kolom label nya udah keisi di skip. setelah ngeskip baris label yang udah keisi lanjut lagi ngecek baris label yg masih kosong dan labelin seperti biasa. format save dibuat per batch dgn format 'namafile_batchxxx_xxx_labeled.xlsx' batch nya merupakan baris yang dikerjakan contoh nya dengan nama file = 'undip_undip_2022_01_01' maka contoh results untuk pengerjaan baris 1 - 300 adalah 'undip_undip_2022_01_01_batch001_100_labeled.xlsx.
+
+beberapa kondisi yang harus dipenuhi adalah sebagai berikut
+
+
+Saya akan mengupdate docstring untuk tiap fungsi berikut karena telah melakukan perubahan. Dimulai dari fungsi 1 
+
+Script ini masih dijalankan dengan mengganti nama file secara eksplisit di dalam file labeling.py untuk mengerjakan file tertentu. Saya ingin membuat nama file bisa dipass sebagai argumen ketika menjalankan nya di terminal. Misalnya ingin menjalankan labeling untuk nama file = 'undip_undip_2022_01_01' dengan 1 batch akan berisi 300 baris maka contoh command ketika menjalankan di terminal adalah
+python labeling.py 'undip_undip_2022_01_01' 300
+
+Saya ingin membuat script untuk membuat virtual environment dan mengaktifkan nya secara langsung (juga jika memungkinkan langsung mengaktifkan virtual environment jika di dalam folder sudah ada venv yang terbentuk)

@@ -132,7 +132,7 @@ def open_dataset(__path__):
     except Exception as e:
         raise Exception(f"Error reading file '{__path__}': {e}")
 
-def labeling(df_path, batch_size=300, temperature=1.0, top_p=1.0, top_k=40, max_retry=3): 
+def labeling(df_path, batch_size=300, temperature=1.0, top_p=1.0, top_k=40, max_retry=5): 
     """
     Melakukan proses pelabelan otomatis terhadap dataset teks menggunakan model Gemini.
 
@@ -201,11 +201,11 @@ def labeling(df_path, batch_size=300, temperature=1.0, top_p=1.0, top_k=40, max_
         - Hasil disimpan secara berkala setelah setiap batch, sehingga aman jika proses terhenti.
     """
     # Cek apakah file sudah pernah dikerjakan sebelumnya
-    output_path = "results/" + df_path + "_labeled.xlsx"
+    output_path = "results/" + df_path + "_labeled"
 
     # Jika sudah ada file hasil, lanjutkan dari situ
-    if os.path.exists(output_path):
-        print(f"📂 Melanjutkan dari checkpoint: {output_path}")
+    if os.path.exists(output_path + ".xlsx"):
+        print(f"📂 Melanjutkan dari checkpoint: {output_path}.xlsx")
         df = open_dataset(output_path)
     else:
         print(f"📂 Membuka dataset asli: dataset/{df_path}.xlsx")
@@ -385,14 +385,15 @@ def labeling(df_path, batch_size=300, temperature=1.0, top_p=1.0, top_k=40, max_
 
     # Simpan ke Excel baru
     
-    df.to_excel(output_path, index=False)
-    print("✅ Labeling selesai, hasil disimpan ke data_labeled.xlsx")
+    df.to_excel(output_path + ".xlsx", index=False)
+    print(f"✅ Labeling selesai, hasil disimpan ke {output_path}.xlsx")
 
 
 def main():
     # Baca file Excel (masukkan nama file yang sudah disimpan di folder dataset tanpa ekstensi nya)
-    __filename__ = "data_testing"
-    labeling(__filename__)
+    # __filename__ = "undip_undip_2022_01_01" 
+    __filename__ = "data_testing" 
+    labeling(df_path=__filename__)
 
 if __name__ == "__main__":
     main()
