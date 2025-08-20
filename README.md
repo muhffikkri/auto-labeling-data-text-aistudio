@@ -44,7 +44,7 @@ Hasil labeling akan otomatis tersimpan dalam file Excel (`.xlsx`) dengan **check
 1. Clone repository:
 
    ```bash
-   git clone https://github.com/username/auto-labeling-aistudio.git
+   git clone https://github.com/muhffikkri/auto-labeling-aistudio.git
    cd auto-labeling-aistudio
    ```
 
