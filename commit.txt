@@ -1,0 +1,26 @@
+<type>(optional scope): <description>
+Tipe umum:
+
+feat: → fitur baru
+
+fix: → perbaikan bug
+
+docs: → update dokumentasi
+
+style: → perubahan formatting (bukan logika)
+
+refactor: → refactor kode (tanpa fitur baru / bugfix)
+
+test: → tambah / update unit test
+
+chore: → maintenance, dependency update, build, CI/CD
+
+Contoh:
+
+feat(labeling): add checkpoint system to resume labeling from last row
+
+fix(api): handle retry when Gemini response count mismatch
+
+docs: add usage instructions in README
+
+chore(deps): update pandas to latest version
