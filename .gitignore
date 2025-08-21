@@ -188,5 +188,9 @@ pip-selfcheck.json
 # End of https://www.toptal.com/developers/gitignore/api/python,venv
 
 # Others
-dataset/
-results/
+# Abaikan seluruh isi folder dataset dan results
+dataset/*
+results/*
+
+# Kecualikan file percobaan
+!dataset/data_sample/

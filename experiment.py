@@ -4,8 +4,9 @@ import os
 import google.generativeai as genai
 import time
 from tqdm import tqdm
-import re
 import glob
+import re 
+import argparse
 
 # Load API key dari .env
 load_dotenv()
@@ -80,7 +81,6 @@ def genai_generate(prompt="", temperature=1.0, top_p=1.0, top_k=40)->list[str]:
         output = response.text.strip().split("\n")
         return output
     except Exception as e:
-        # print(f"Error saat request API: {e}")
         time.sleep(3)
         raise Exception(f"❌ Error saat request API: {e}")
 
@@ -135,120 +135,84 @@ def open_dataset(__path__):
 
 def labeling(df_path, batch_size=300, temperature=1.0, top_p=1.0, top_k=40, max_retry=5):
     """
-    Melakukan proses pelabelan otomatis, melanjutkan dari batch terakhir,
-    dan hanya memproses baris yang labelnya masih kosong.
-
-    Fungsi ini membaca dataset berupa file Excel, lalu melakukan labeling teks 
-    (sentimen & relevansi dalam konteks universitas) ke dalam 4 kategori: 
-    "POSITIF", "NEGATIF", "NETRAL", atau "TIDAK RELEVAN".  
-    Justifikasi diberikan untuk setiap label, termasuk catatan deteksi buzzer.  
-    Proses berjalan secara batch dengan checkpoint otomatis untuk mencegah hilangnya 
-    hasil jika proses terhenti.
-
-        Args:
-        df_path (str):
-            Nama file dataset tanpa ekstensi, misalnya `"tweets_dataset"`.
-            Fungsi akan mencari file di `"dataset/{df_path}.xlsx"` atau 
-            melanjutkan dari `"results/{df_path}_labeled.xlsx"` jika tersedia.
-        batch_size (int, optional):
-            Jumlah baris teks yang diproses per batch. Default = 300.
-        temperature (float, optional):
-            Parameter kontrol kreativitas model (semakin rendah → semakin deterministik).
-            Default = 1.0.
-        top_p (float, optional):
-            Parameter nucleus sampling (0-1). Default = 1.0.
-        top_k (int, optional):
-            Batas jumlah token kandidat teratas untuk sampling. Default = 40.
-        max_retry (int, optional):
-            Jumlah maksimal percobaan ulang per batch jika output tidak valid.
-            Default = 3.
-
-    Returns:
-        None:
-            Hasil disimpan dalam file Excel baru di folder `results/` dengan nama:
-            `{df_path}_labeled.xlsx`.
-
-    Raises:
-        Exception:
-            Jika terjadi error saat membaca dataset atau berinteraksi dengan model Gemini.
-        ValueError:
-            Jika format output model tidak sesuai atau jumlah baris hasil tidak sama 
-            dengan jumlah input (setelah percobaan ulang melebihi `max_retry`).
-
-    Expected Output:
-        - Dataset hasil labeling dalam file Excel, dengan tambahan kolom:
-          - `label`: kategori sentimen (POSITIF, NEGATIF, NETRAL, TIDAK RELEVAN).
-          - `justifikasi`: alasan singkat dan catatan buzzer (jika ada).
-        - Progress log pada console (checkpoint, batch processing, validasi, error).
-
-    Usage Example:
-        >>> labeling("tweets_dataset", batch_size=200, temperature=0.7, top_p=0.9, top_k=40)
-        📂 Membuka dataset asli: dataset/tweets_dataset.xlsx
-        ➡️ Mulai dari baris 0 (checkpoint)
-        🔄 Memproses batch 0:200 (percobaan 1) ...
-        ✅ Batch valid, menyimpan hasil ...
-        💾 Checkpoint tersimpan di results/tweets_dataset_labeled.xlsx
-        ✅ Labeling selesai, hasil disimpan ke results/tweets_dataset_labeled.xlsx
-
-    Limitations:
-        - Hanya mendukung input file Excel (`.xlsx`).
-        - Bergantung pada kualitas respons dari model Gemini; bisa gagal jika model
-          memberikan output dengan format tidak valid.
-        - Proses labeling bisa lama jika dataset sangat besar.
-        - Jika semua data sudah terlabeli sebelumnya, fungsi akan berhenti otomatis.
-
-    Notes:
-        - Fungsi mendukung **resume mode**: jika file hasil labeling sudah ada, 
-          proses akan dilanjutkan dari checkpoint terakhir.
-        - Hasil disimpan secara berkala setelah setiap batch, sehingga aman jika proses terhenti.
+    Melakukan pelabelan otomatis dengan logika iterasi per-batch yang canggih.
+    - Melewati batch yang sudah memiliki file hasil.
+    - Membuat checkpoint gratis untuk batch yang sudah terisi penuh di file sumber.
+    - Memproses ulang seluruh batch jika hanya terisi sebagian atau kosong.
     """
+    # Langkah 1: Persiapan
     base_name = os.path.splitext(os.path.basename(df_path))[0]
-    
-    # Cari batch terakhir yang sudah dikerjakan di folder results
-    result_files = glob.glob(f"results/{base_name}_batch*.xlsx")
-    
-    if result_files:
-        # Cari file batch dengan nomor tertinggi
-        latest_file = max(result_files, key=os.path.getctime)
-        print(f"📂 Melanjutkan dari checkpoint terakhir: {latest_file}")
-        df = open_dataset(latest_file)
-    else:
-        print(f"📂 Membuka dataset asli: {df_path}")
-        df = open_dataset(df_path)
-        # Inisialisasi kolom jika belum ada
-        if "label" not in df.columns:
-            df["label"] = None
-        if "justifikasi" not in df.columns:
-            df["justifikasi"] = None
+    output_dir = os.path.join("results", base_name)
+    os.makedirs(output_dir, exist_ok=True)
+    print(f"📂 Direktori output: {output_dir}")
 
-    # Dapatkan indeks dari baris yang labelnya masih kosong
-    empty_label_indices = df[df['label'].isna()].index
-    
-    if empty_label_indices.empty:
-        print("✅ Semua data sudah terlabeli, tidak ada pekerjaan baru.")
+    full_output_path = os.path.join(output_dir, f"{base_name}_full_labeled.xlsx")
+    if os.path.exists(full_output_path):
+        print(f"\n❌ PEKERJAAN SELESAI: File '{os.path.basename(full_output_path)}' sudah ada. Hapus untuk menjalankan ulang.")
         return
 
-    print(f"➡️ Ditemukan {len(empty_label_indices)} baris yang belum dilabeli. Memulai proses...")
+    # Langkah 2: Muat dataset asli dan pastikan kolom ada
+    print(f"📖 Membaca dataset asli: {df_path}")
+    df_master = open_dataset(df_path)
+    total_rows = len(df_master)
+    
+    # === PERBAIKAN DI SINI ===
+    # Pastikan kolom 'label' dan 'justifikasi' ada di df_master SEGERA setelah dimuat.
+    if "label" not in df_master.columns:
+        df_master["label"] = None
+    if "justifikasi" not in df_master.columns:
+        df_master["justifikasi"] = None
+    # ==========================
+    
+    # Inisialisasi df_progress. Kita akan memuat progres jika ada, jika tidak mulai dari master.
+    result_files = glob.glob(os.path.join(output_dir, f"{base_name}_batch*.xlsx"))
+    if result_files:
+        latest_file = max(result_files, key=os.path.getmtime)
+        print(f"📖 Melanjutkan progres dari checkpoint terbaru: {os.path.basename(latest_file)}")
+        df_progress = open_dataset(latest_file)
+    else:
+        print("📖 Memulai pekerjaan baru dari dataset asli.")
+        df_progress = df_master.copy()
+        # Baris pengecekan kolom di sini menjadi redundan tetapi tidak berbahaya
+        if "label" not in df_progress.columns: df_progress["label"] = None
+        if "justifikasi" not in df_progress.columns: df_progress["justifikasi"] = None
 
-    # Proses data dalam batch
-    for i in tqdm(range(0, len(empty_label_indices), batch_size), desc="🔄 Labeling batches", unit="batch"):
-        
-        batch_indices = empty_label_indices[i:i+batch_size]
-        if len(batch_indices) == 0:
+
+    # Langkah 3: Iterasi per batch dan putuskan tindakan
+    print("\n🏁 Memulai proses verifikasi dan pelabelan per-batch...")
+    for start in tqdm(range(0, total_rows, batch_size), desc="Overall Progress", unit="batch"):
+        end = min(start + batch_size, total_rows)
+        batch_filename = os.path.join(output_dir, f"{base_name}_batch{start + 1:03d}_{end:03d}_labeled.xlsx")
+
+        print(f"\n--- Memeriksa Batch Baris {start + 1}-{end} ---")
+
+        # Prioritas 1: Apakah file hasil untuk batch ini sudah ada?
+        if os.path.exists(batch_filename):
+            print(f"✅ Status: Sudah Selesai. File '{os.path.basename(batch_filename)}' ditemukan. Melewati.")
             continue
 
-        start_row = batch_indices[0]
-        end_row = batch_indices[-1]
+        # Prioritas 2: Cek data sumber jika file hasil tidak ada
+        batch_slice_master = df_master.iloc[start:end]
+        # Baris ini sekarang aman karena df_master dijamin memiliki kolom 'label'
+        if batch_slice_master['label'].notna().all():
+            print(f"✅ Status: Sudah Terisi di Sumber. Membuat checkpoint gratis...")
+            df_progress.update(batch_slice_master)
+            df_progress.to_excel(batch_filename, index=False)
+            print(f"💾 Checkpoint '{os.path.basename(batch_filename)}' dibuat.")
+            continue
 
-        batch_df = df.loc[batch_indices]
-        texts = batch_df["full_text"].tolist()
+        # Prioritas 3: Proses batch (karena kosong atau terisi sebagian)
+        print(f"⚠️ Status: Perlu Diproses (kosong atau terisi sebagian).")
+        
+        texts = df_progress.iloc[start:end]["full_text"].tolist()
 
         valid = False
         attempts = 0
         while not valid and attempts < max_retry:
             attempts += 1
-            print(f"\n🔄 Memproses batch baris {start_row} - {end_row} (percobaan {attempts}) ...")
-
+            print(f"\n🔄 Memproses batch untuk baris {start + 1} - {end} (percobaan {attempts}) ...")
+            
+            # (Prompt untuk Gemini tetap sama)
             prompt = f"""
             Prompt untuk Pelabelan Tweet ke dalam Kategori Sentimen Positif, Negatif, Netral, atau Tidak Relevan dalam Konteks Universitas dengan Deteksi Buzzer
 
@@ -337,90 +301,105 @@ def labeling(df_path, batch_size=300, temperature=1.0, top_p=1.0, top_k=40, max_
             Teks:
             {texts}
             """
-
+            
             try:
                 output = genai_generate(prompt, temperature, top_p, top_k)
-
                 if len(output) != len(texts):
                     print(f"❌ Jumlah output ({len(output)}) tidak sesuai input ({len(texts)})")
                     time.sleep(2)
                     continue
-
                 allowed_labels = ["POSITIF", "NEGATIF", "NETRAL", "TIDAK RELEVAN"]
                 format_valid = all(
                     any(output_line.strip().startswith(label) for label in allowed_labels) and " - " in output_line
                     for output_line in output
                 )
-
                 if not format_valid:
                     print("❌ Format output tidak valid (tidak sesuai 'LABEL - Justifikasi')")
                     time.sleep(2)
                     continue
-                
                 valid = True
-
             except Exception as e:
                 print(f"❌ Error saat memanggil API: {e}")
-                time.sleep(5) # Tunggu lebih lama jika ada error API
+                time.sleep(5)
 
         if valid:
-            print("✅ Batch valid, menyimpan hasil ...")
+            print("✅ Batch valid, memperbarui hasil...")
             labels, justifikasi = [], []
             for line in output:
                 parts = line.split(" - ", 1)
                 labels.append(parts[0].strip())
                 justifikasi.append(parts[1].strip() if len(parts) > 1 else "")
 
-            df.loc[batch_indices, 'label'] = labels
-            df.loc[batch_indices, 'justifikasi'] = justifikasi
+            df_progress.iloc[start:end, df_progress.columns.get_loc('label')] = labels
+            df_progress.iloc[start:end, df_progress.columns.get_loc('justifikasi')] = justifikasi
 
-            # Format nama file batch
-            output_filename = f"results/{base_name}_batch{start_row+1:03d}_{end_row+1:03d}_labeled.xlsx"
-            df.to_excel(output_filename, index=False)
-            print(f"💾 Checkpoint batch tersimpan di {output_filename}")
+            df_progress.to_excel(batch_filename, index=False)
+            print(f"💾 Checkpoint baru '{os.path.basename(batch_filename)}' disimpan.")
         else:
-            print(f"❌ Gagal memproses batch baris {start_row}-{end_row} setelah {max_retry} percobaan. Melewati batch ini.")
+            print(f"❌ Gagal memproses batch untuk baris {start + 1}-{end} setelah {max_retry} percobaan. Melewati batch ini.")
     
-    final_output_path = f"results/{base_name}_final_labeled.xlsx"
-    df.to_excel(final_output_path, index=False)
-    print(f"✅ Labeling selesai, hasil akhir disimpan ke {final_output_path}")
+    # Langkah 4: Finalisasi
+    print("\n🏁 Proses iterasi batch selesai.")
+    if df_progress['label'].notna().all():
+        df_progress.to_excel(full_output_path, index=False)
+        print(f"✅ Semua baris telah terisi! Hasil akhir yang lengkap disimpan di: {full_output_path}")
+    else:
+        partial_output_path = os.path.join(output_dir, f"{base_name}_PARTIAL_labeled.xlsx")
+        df_progress.to_excel(partial_output_path, index=False)
+        print(f"⚠️ Masih ada baris yang belum terlabeli. Hasil parsial disimpan di: {partial_output_path}")
 
 
-def main():
+def main(filename, batch_size):
     """
-    README:
-    Skrip ini dirancang untuk melakukan pelabelan data teks secara otomatis menggunakan AI generatif.
-    
-    Struktur Folder:
-    - /.gitignore: Pastikan folder 'dataset/' dan 'results/' ditambahkan ke file .gitignore Anda.
-    - /dataset: Tempatkan file Excel dataset Anda di sini. Skrip akan membaca file dari folder ini.
-    - /results: Hasil pelabelan akan disimpan di sini dalam format batch.
-    
-    Cara Kerja:
-    1. Skrip akan secara otomatis membuat folder 'dataset' dan 'results' jika belum ada.
-    2. Ia akan mencari file hasil kerja sebelumnya di folder 'results'. Jika ditemukan, proses akan
-       dilanjutkan dari sana.
-    3. Jika tidak ada, ia akan memulai dari file asli di folder 'dataset'.
-    4. Skrip HANYA akan memproses baris di mana kolom 'label' masih kosong. Baris yang sudah
-       terisi akan dilewati.
-    5. Hasil disimpan per-batch dengan format nama 'namafile_batch<awal>_<akhir>_labeled.xlsx'
-       di folder 'results'.
+    Fungsi utama untuk menjalankan proses pelabelan pada file tertentu.
+
+    Args:
+        filename (str): Nama dasar file dataset (tanpa ekstensi .xlsx).
+        batch_size (int): Jumlah baris yang akan diproses per batch.
     """
-    # Membuat folder jika belum ada
+    # Membuat folder yang diperlukan jika belum ada
     os.makedirs("dataset", exist_ok=True)
     os.makedirs("results", exist_ok=True)
 
-    # Baca file Excel (masukkan nama file yang sudah disimpan di folder dataset tanpa ekstensi nya)
-    __filename__ = "undip_undip_2022_01_01"
-    dataset_path = f"dataset/{__filename__}.xlsx"
+    # Membangun path lengkap ke file dataset
+    dataset_path = f"dataset/{filename}.xlsx"
     
-    # Cek apakah file dataset ada
+    # Memeriksa apakah file dataset benar-benar ada
     if not os.path.exists(dataset_path):
         print(f"❌ Error: File dataset tidak ditemukan di '{dataset_path}'")
-        print("Pastikan Anda menempatkan file dataset di dalam folder 'dataset'.")
+        print("Pastikan nama file benar dan file tersebut ada di dalam folder 'dataset'.")
         return
         
-    labeling(df_path=dataset_path)
+    # Memanggil fungsi pelabelan dengan parameter yang diterima
+    labeling(df_path=dataset_path, batch_size=batch_size)
 
 if __name__ == "__main__":
-    main()
+    # Inisialisasi parser
+    parser = argparse.ArgumentParser(
+        description="""
+        Skrip pelabelan data otomatis menggunakan AI Generatif.
+        
+        Skrip ini memproses file Excel dari folder /dataset, melabeli baris-baris
+        yang kosong secara batch, dan menyimpan hasilnya di subfolder dalam /results.
+        Mendukung melanjutkan pekerjaan dari checkpoint terakhir.
+        """,
+        formatter_class=argparse.RawTextHelpFormatter # Untuk format deskripsi yang lebih baik
+    )
+
+    # Tambahkan argumen yang diperlukan
+    parser.add_argument(
+        "filename", 
+        type=str, 
+        help="Nama dasar file dataset yang akan diproses (tanpa ekstensi .xlsx).\nContoh: 'undip_undip_2022_01_01'"
+    )
+    parser.add_argument(
+        "batch_size", 
+        type=int, 
+        help="Jumlah baris yang akan diproses dalam satu batch.\nContoh: 300"
+    )
+
+    # Parsing argumen dari baris perintah
+    args = parser.parse_args()
+
+    # Panggil fungsi main dengan argumen yang telah diparsing
+    main(args.filename, args.batch_size)
