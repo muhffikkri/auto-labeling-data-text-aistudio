@@ -1,157 +1,141 @@
 # 📌 Auto Labeling Tweets dengan Gemini
 
-Proyek ini merupakan sistem **pelabelan otomatis** untuk dataset teks (misalnya tweet) menggunakan **Google Gemini API**.  
-Label yang dihasilkan meliputi kategori sentimen dan relevansi:
+Proyek ini adalah sistem **pelabelan data otomatis**, dirancang untuk memproses dataset teks (seperti tweet) menggunakan **Google Gemini API**. Skrip ini secara cerdas menetapkan label sentimen dan relevansi (`POSITIF`, `NEGATIF`, `NETRAL`, `TIDAK RELEVAN`) beserta justifikasi singkat untuk setiap baris data.
 
-- POSITIF
-- NEGATIF
-- NETRAL
-- TIDAK RELEVAN
-
-Setiap teks juga diberi **justifikasi singkat** (alasan pemilihan label + catatan buzzer jika terdeteksi).  
-Hasil labeling akan otomatis tersimpan dalam file Excel (`.xlsx`) dengan **checkpoint** agar proses bisa dilanjutkan tanpa kehilangan progress.
+Dibangun dengan mempertimbangkan pekerjaan skala besar, sistem ini sepenuhnya **dapat dilanjutkan (resumable)**, menangani interupsi dengan mulus, dan mengatur hasil secara sistematis untuk setiap dataset yang diproses.
 
 ---
 
 ## ✨ Fitur Utama
 
-- 🔄 **Checkpointing** → proses bisa dilanjutkan dari hasil terakhir.
-- 📊 **Output Excel** → hasil labeling otomatis tersimpan dengan kolom tambahan (`label`, `justifikasi`).
-- ⚡ **Batch Processing** → data besar bisa diproses bertahap (default 300 baris per batch).
-- 🔐 **Retry Mechanism** → otomatis retry jika model menghasilkan output tidak valid.
-- 🎛 **Configurable Parameters** → atur `temperature`, `top_p`, `top_k`, `batch_size`, dll.
+- 🚀 **Antarmuka Baris Perintah (CLI)** → Jalankan pelabelan untuk file apa pun dengan mudah langsung dari terminal, cukup berikan nama file dan ukuran batch.
+- 📂 **Manajemen Output Terstruktur** → Secara otomatis membuat sub-direktori untuk setiap dataset di dalam folder `results/`, menjaga agar semua file batch dan hasil akhir tetap rapi dan terpisah.
+- 🧠 **Logika Batch Cerdas** → Untuk setiap batch, skrip secara otomatis memutuskan tindakan terbaik:
+  1.  **Lewati jika Selesai**: Melewati batch yang file hasilnya sudah ada.
+  2.  **Checkpoint Gratis**: Membuat file checkpoint jika data di file sumber sudah terisi penuh, tanpa membuang kuota API.
+  3.  **Proses & Timpa**: Memproses (atau memproses ulang) seluruh batch jika datanya kosong atau hanya terisi sebagian, demi menjamin konsistensi.
+- 🔄 **Resume Cerdas & Checkpointing** → Jika proses dihentikan, skrip akan memuat progres dari file checkpoint **terbaru** dan secara otomatis melanjutkan pekerjaan dari sana, termasuk mengisi "lubang" data yang terlewat.
+- 🔐 **Mekanisme Retry** → Mencoba ulang secara otomatis jika panggilan API gagal atau menghasilkan format yang tidak valid, meningkatkan keandalan proses.
 
 ---
 
 ## 📂 Struktur Direktori
 
-```
-├── dataset/ # Folder dataset input (Excel .xlsx)
-│ └── tweets_dataset.xlsx
-├── prompt/ # Folder untuk menyimpan prompt
-│ └── tweets_dataset_labeled.xlsx
-├── results/ # Folder output hasil labeling
-│ └── tweets_dataset_labeled.xlsx
-├── labeling.py # Script utama
-├── requirements.txt # Dependency Python
-└── README.md # Dokumentasi project
+Struktur proyek dirancang agar tetap bersih dan teratur.
+
+```.
+├── dataset/                # Folder untuk menyimpan semua file dataset input (.xlsx)
+│   └── tweets_kampus_a.xlsx
+│   └── data_sentimen_b.xlsx
+├── results/                # Folder output utama
+│   └── tweets_kampus_a/    # Sub-folder dibuat otomatis untuk setiap dataset
+│       ├── ..._batch001_300_labeled.xlsx
+│       ├── ..._batch301_600_labeled.xlsx
+│       └── ..._full_labeled.xlsx
+├── .env                    # File konfigurasi untuk menyimpan API Key
+├── .gitignore
+├── labeling.py             # Skrip utama untuk menjalankan pelabelan
+├── requirements.txt
+└── README.md
 ```
 
 ---
 
 ## ⚙️ Instalasi & Setup
 
-1. Clone repository:
+1.  **Clone Repository:**
 
-   ```bash
-   git clone https://github.com/muhffikkri/auto-labeling-aistudio.git
-   cd auto-labeling-aistudio
-   ```
+    ```bash
+    git clone https://github.com/muhffikkri/auto-labeling-aistudio.git
+    cd auto-labeling-aistudio
+    ```
 
-2. Buat virtual environment python
+2.  **Buat dan Aktifkan Virtual Environment:**
 
-   ```bash
-   python -m venv venv
-   ```
+    ```bash
+    # Membuat venv
+    python -m venv venv
+    # Mengaktifkan venv (Windows)
+    venv\Scripts\activate
+    # Mengaktifkan venv (macOS/Linux)
+    source venv/bin/activate
+    ```
 
-3. Aktifkan virtual environment:
+3.  **Install Dependencies:**
 
-   ```bash
-   venv/bin/activate
-   ```
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-4. Install dependencies:
+4.  **Siapkan Dataset:**
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+    - Buat folder `dataset` jika belum ada.
+    - Letakkan file Excel (`.xlsx`) Anda di dalamnya. Contoh: `dataset/tweets_kampus_a.xlsx`.
 
-5. Siapkan folder dataset dan letakkan file Excel (`.xlsx`) di dalamnya.
-   Contoh: `dataset/tweets_dataset.xlsx`
-
-6. Buat file .env dan atur **Google Gemini API Key**:
-
-   ```bash
-   GOOGLE_API_KEY="your_api_key_here"
-   ```
+5.  **Atur API Key:**
+    - Buat file baru bernama `.env` di direktori utama.
+    - Isi file tersebut dengan Google Gemini API Key Anda:
+      ```
+      GOOGLE_API_KEY="your_api_key_here"
+      ```
 
 ---
 
 ## 🚀 Cara Penggunaan
 
-Jalankan script `labeling.py`:
+Skrip ini dijalankan melalui terminal dengan menyediakan **nama file** dan **ukuran batch** sebagai argumen.
+
+**Sintaks Perintah:**
 
 ```bash
-python labeling.py
+python labeling.py <nama_file_dataset> <ukuran_batch>
 ```
 
-Atau langsung panggil fungsi di dalam Python:
+- `<nama_file_dataset>`: Nama file di folder `dataset` (tanpa ekstensi `.xlsx`).
+- `<ukuran_batch>`: Jumlah baris yang akan diproses dalam satu siklus.
 
-```python
-from labeling import labeling
+**Contoh Praktis:**
 
-# Melakukan labeling dataset
-labeling("tweets_dataset", batch_size=200, temperature=0.7, top_p=0.9, top_k=40)
+```bash
+# Memproses 'tweets_kampus_a.xlsx' dengan batch berisi 300 baris
+python labeling.py tweets_kampus_a 300
+
+# Memproses 'data_sentimen_b.xlsx' dengan batch berisi 100 baris
+python labeling.py data_sentimen_b 100
 ```
 
-Output akan tersimpan di folder `results/` dengan nama:
-`tweets_dataset_labeled.xlsx`
+Skrip akan secara otomatis membuat folder `results/tweets_kampus_a/`, menyimpan file-file checkpoint di sana, dan membuat file `tweets_kampus_a_full_labeled.xlsx` setelah semua baris berhasil dilabeli.
 
 ---
 
 ## 📖 Dokumentasi Fungsi
 
-```python
-genai_generate(prompt, temperature=1.0, top_p=1.0, top_k=40)
-```
-
-Mengirim prompt ke Gemini dan mengembalikan hasil dalam bentuk list string.
-
-```python
-open_dataset(path)
-```
-
-Membuka dataset Excel (`.xlsx`) dan mengembalikan DataFrame pandas.
-
-```python
-labeling(df_path, batch_size=300, temperature=1.0, top_p=1.0, top_k=40, max_retry=3)
-```
-
-Melakukan labeling otomatis terhadap dataset teks, menyimpan hasil ke Excel dengan checkpoint.
+- `genai_generate(...)`: Mengirimkan prompt ke model 'gemini-2.5-pro' dan mem-parsing hasilnya menjadi list string.
+- `open_dataset(...)`: Membaca file Excel dan memuatnya ke dalam DataFrame pandas dengan penanganan error.
+- `labeling(...)`: Mesin utama yang mengorkestrasi seluruh alur kerja pelabelan secara batch dan stateful.
+- `main(...)`: Titik masuk yang memvalidasi input dari baris perintah dan memulai proses pelabelan.
 
 ---
 
 ## ⚠️ Batasan
 
-- Hanya mendukung input file `.xlsx`.
-- Bergantung pada kualitas output Gemini (bisa error jika format output salah).
-- Proses bisa lama untuk dataset yang sangat besar.
-- Membutuhkan koneksi internet stabil dan API key aktif.
-- Error karena intervensi user tidak akan tersimpan, namun error karena max attemps akan menyimpan batch terakhir yang berhasil dikerjakan
-
----
-
-## 📌 Contoh Output
-
-Dataset hasil labeling akan memiliki kolom tambahan:
-
-| text                                       | label         | justifikasi                                      |
-| ------------------------------------------ | ------------- | ------------------------------------------------ |
-| "Program ini bagus untuk mahasiswa"        | POSITIF       | Menyatakan dukungan dan hal baik terkait kampus. |
-| "Birokrasi ribet bikin malas daftar ulang" | NEGATIF       | Keluhan langsung terkait layanan universitas.    |
-| "Aku makan bakso enak banget"              | TIDAK RELEVAN | Tidak ada hubungan dengan kampus/universitas.    |
+- Hanya mendukung input file Excel (`.xlsx`).
+- Kualitas label bergantung sepenuhnya pada performa model Gemini.
+- Membutuhkan koneksi internet yang stabil dan API key yang aktif.
+- Error karena intervensi user (misal: Ctrl+C) memungkinkan skrip dilanjutkan dari checkpoint terakhir. Kegagalan batch setelah `max_retry` akan dilewati, dan hasilnya akan ditandai sebagai `_PARTIAL_labeled.xlsx`.
 
 ---
 
 ## 🛠️ Teknologi
 
-- Python 3.12.6
+- Python 3.10+
 - Pandas
-- Google Gemini API
+- Google Generative AI for Python
 
-## ⚙ Potential update:
+## ⚙️ Rencana Pengembangan
 
-1. Menambahkan self_improvement_prompt, correction_prompt, verification_system_prompt
-2. Meningkatkan mekanisme retry dengan exponential backoff
-3. Menambahkan logging untuk setiap langkah proses
-4. Menyimpan log error pada /logs
+1.  Menambahkan sistem logging yang lebih detail ke dalam file di folder `/logs`.
+2.  Meningkatkan mekanisme retry dengan _exponential backoff_ untuk menangani limit API dengan lebih baik.
+3.  Menambahkan prompt untuk verifikasi mandiri dan koreksi hasil.
+4.  Dukungan untuk memproses beberapa file secara berurutan dalam satu perintah.
+5.  Membuat file init untuk membuat venv dan menginstall dependencies secara otomatis
