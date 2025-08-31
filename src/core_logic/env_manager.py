@@ -1,0 +1,66 @@
+# src/core_logic/env_manager.py
+
+import os
+from dotenv import load_dotenv, set_key, find_dotenv
+from typing import Dict, List, Tuple
+
+def load_env_variables() -> Tuple[Dict[str, str], List[str]]:
+    """
+    Memuat variabel konfigurasi dan API keys dari file .env.
+
+    Returns:
+        Tuple[Dict[str, str], List[str]]: 
+        Sebuah tuple berisi:
+        - Dictionary untuk setting umum (MODEL_NAME, dll.)
+        - List berisi API keys.
+    """
+    load_dotenv()
+    
+    settings = {
+        "MODEL_NAME": os.getenv("MODEL_NAME", "gemini-1.5-pro-latest"),
+        "OUTPUT_DIR": os.getenv("OUTPUT_DIR", "results"),
+        "DATASET_DIR": os.getenv("DATASET_DIR", "dataset"),
+    }
+    
+    api_keys = []
+    i = 1
+    while True:
+        key = os.getenv(f"GOOGLE_API_KEY_{i}")
+        if key:
+            api_keys.append(key)
+            i += 1
+        else:
+            break
+            
+    return settings, api_keys
+
+def save_env_variables(settings: Dict[str, str], api_keys: List[str]):
+    """
+    Menyimpan settings dan API keys ke dalam file .env.
+    Akan membuat file .env jika belum ada.
+    """
+    env_file = find_dotenv()
+    if not env_file:
+        # Jika .env tidak ada, buat file kosong
+        with open(".env", "w") as f:
+            pass
+        env_file = find_dotenv()
+
+    # Menyimpan settings umum
+    for key, value in settings.items():
+        set_key(env_file, key, value)
+        
+    # Menghapus key lama sebelum menulis yang baru untuk menghindari sisa
+    # (Ini adalah pendekatan sederhana, library dotenv tidak punya fungsi 'unset')
+    # Kita akan baca semua, hapus yang GOOGLE_API_KEY, lalu tulis ulang
+    with open(env_file, 'r') as f:
+        lines = f.readlines()
+    with open(env_file, 'w') as f:
+        for line in lines:
+            if not line.strip().startswith('GOOGLE_API_KEY_'):
+                f.write(line)
+
+    # Menulis API keys yang baru
+    for i, key_value in enumerate(api_keys, 1):
+        if key_value.strip(): # Hanya simpan jika tidak kosong
+            set_key(env_file, f"GOOGLE_API_KEY_{i}", key_value)
