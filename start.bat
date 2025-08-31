@@ -31,7 +31,7 @@ ECHO.
 ECHO [3/4] Menginstal atau memperbarui library yang dibutuhkan dari requirements.txt...
 
 REM 
-py -m pip install --upgrade pip
+python -m pip install --upgrade pip
 
 pip install -r requirements.txt
 IF %ERRORLEVEL% NEQ 0 (
@@ -43,7 +43,7 @@ IF %ERRORLEVEL% NEQ 0 (
 ECHO.
 ECHO [4/4] Semua persiapan selesai. Menjalankan aplikasi GUI...
 ECHO.
-py main.py
+python main.py
 
 ECHO.
 ECHO Aplikasi telah ditutup. Tekan tombol apa saja untuk keluar.
