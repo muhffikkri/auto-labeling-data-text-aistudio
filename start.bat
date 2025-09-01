@@ -13,7 +13,7 @@ ECHO.
 REM Cek apakah direktori venv sudah ada
 IF NOT EXIST venv (
     ECHO [1/4] Direktori 'venv' tidak ditemukan. Membuat virtual environment baru...
-    py -m venv venv
+    python -m venv venv
     IF %ERRORLEVEL% NEQ 0 (
         ECHO Gagal membuat virtual environment. Pastikan 'py' atau 'python' ada di PATH.
         PAUSE
