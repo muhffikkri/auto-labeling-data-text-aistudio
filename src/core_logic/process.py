@@ -362,14 +362,130 @@ def open_dataset(dataset_dir: str, base_filename: str) -> Tuple[pd.DataFrame, st
 
 
 # <<< PERUBAHAN DIMULAI: Seluruh fungsi label_dataset dioptimalkan untuk resume
+def create_or_resume_output_file(df_master: pd.DataFrame, base_name: str, output_dir: str) -> tuple[str, pd.DataFrame, dict]:
+    """
+    Membuat atau melanjutkan file output tunggal untuk labeling.
+    
+    Returns:
+        tuple: (filepath, working_df, progress_info)
+        - filepath: Path ke file output
+        - working_df: DataFrame untuk dikerjakan (copy dari master dengan progress existing)
+        - progress_info: Dict dengan info progress (total, labeled, unlabeled, percent)
+    """
+    from datetime import datetime
+    
+    # Generate filename dengan timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{base_name}_labeled_{timestamp}.xlsx"
+    filepath = os.path.join(output_dir, filename)
+    
+    # Cek apakah ada file existing dengan pattern yang sama
+    existing_files = []
+    if os.path.exists(output_dir):
+        for f in os.listdir(output_dir):
+            if f.startswith(f"{base_name}_labeled_") and f.endswith(".xlsx"):
+                existing_files.append(f)
+    
+    if existing_files:
+        # Gunakan file yang paling baru
+        existing_files.sort(reverse=True)
+        latest_file = existing_files[0]
+        filepath = os.path.join(output_dir, latest_file)
+        
+        logging.info(f"📂 File existing ditemukan: {latest_file}")
+        
+        try:
+            # Load existing progress
+            existing_df = pd.read_excel(filepath)
+            logging.info(f"✅ Loaded existing file dengan {len(existing_df)} baris")
+            
+            # Ensure required columns exist
+            if "label" not in existing_df.columns: 
+                existing_df["label"] = None
+            if "justifikasi" not in existing_df.columns: 
+                existing_df["justifikasi"] = None
+            if 'id' not in existing_df.columns:
+                existing_df['id'] = range(len(existing_df))
+            
+            # Use existing file as working dataframe
+            working_df = existing_df.copy()
+            
+        except Exception as e:
+            logging.warning(f"⚠️ Error loading existing file: {e}")
+            logging.info("🔄 Membuat file baru...")
+            working_df = df_master.copy()
+            
+    else:
+        logging.info(f"🆕 Membuat file output baru: {filename}")
+        working_df = df_master.copy()
+        
+        # Ensure required columns
+        if "label" not in working_df.columns: 
+            working_df["label"] = None
+        if "justifikasi" not in working_df.columns: 
+            working_df["justifikasi"] = None
+        if 'id' not in working_df.columns:
+            working_df['id'] = range(len(working_df))
+    
+    # Calculate progress
+    total_rows = len(working_df)
+    labeled_rows = working_df['label'].notna().sum()
+    unlabeled_rows = total_rows - labeled_rows
+    percent_complete = (labeled_rows / total_rows * 100) if total_rows > 0 else 0
+    
+    progress_info = {
+        'total': total_rows,
+        'labeled': labeled_rows,
+        'unlabeled': unlabeled_rows,
+        'percent': percent_complete
+    }
+    
+    logging.info(f"📊 Progress: {labeled_rows}/{total_rows} ({percent_complete:.1f}%) - {unlabeled_rows} remaining")
+    
+    return filepath, working_df, progress_info
+
+
+def find_optimal_batches(df: pd.DataFrame, batch_size: int) -> List[tuple]:
+    """
+    Menemukan batch yang optimal untuk diproses (skip baris yang sudah dilabeli parsial).
+    
+    Returns:
+        List[tuple]: List of (start_idx, end_idx) untuk batch yang perlu diproses
+    """
+    total_rows = len(df)
+    batches_to_process = []
+    
+    for start in range(0, total_rows, batch_size):
+        end = min(start + batch_size, total_rows)
+        batch_slice = df.iloc[start:end]
+        
+        # Hitung status labeling dalam batch ini
+        labeled_count = batch_slice['label'].notna().sum()
+        total_in_batch = len(batch_slice)
+        
+        # Skip batch yang sudah complete
+        if labeled_count == total_in_batch:
+            logging.info(f"⏭️ Skip batch {start+1}-{end} (already complete: {labeled_count}/{total_in_batch})")
+            continue
+        
+        # Skip batch yang sudah parsial (untuk efisiensi quota)
+        if labeled_count > 0:
+            logging.info(f"⏭️ Skip batch {start+1}-{end} (partial: {labeled_count}/{total_in_batch} - tidak efisien)")
+            continue
+        
+        # Proses batch yang benar-benar kosong
+        logging.info(f"✅ Queue batch {start+1}-{end} (unlabeled: 0/{total_in_batch})")
+        batches_to_process.append((start, end))
+    
+    return batches_to_process
+
+
 def label_dataset(df_master: pd.DataFrame, base_name: str, batch_size: int, max_retry: int, generation_config: Dict, text_column_name: str, allowed_labels: List[str], stop_event: threading.Event) -> None:
     """
-    Mengorkestrasi proses pelabelan dengan logika resume yang efisien.
-    Semua hasil disimpan di satu file per batch tanpa split labeled/unlabeled.
+    Mengorkestrasi proses pelabelan dengan single file output dan resume capability.
+    Membuat copy dataset ke results folder, lalu update in-place.
     """
     output_dir_for_project = os.path.join(CONFIG['OUTPUT_DIR'], base_name)
-    
-    # Simplified directory structure - no more labeled/unlabeled split
     os.makedirs(output_dir_for_project, exist_ok=True)
     
     logging.info(f"📂 Direktori output proyek: {output_dir_for_project}")
@@ -379,13 +495,38 @@ def label_dataset(df_master: pd.DataFrame, base_name: str, batch_size: int, max_
     logging.info(f"🚀 Session dimulai: {session_manager.session_id}")
     logging.info(f"📁 Session directory: {session_manager.session_dir}")
 
-    prompt_template = load_prompt_template()
-    if "label" not in df_master.columns: df_master["label"] = None
-    if "justifikasi" not in df_master.columns: df_master["justifikasi"] = None
-    if 'id' not in df_master.columns:
-        df_master['id'] = range(len(df_master))
+    # <<< SINGLE FILE OUTPUT: Create or resume >>>
+    output_filepath, working_df, progress_info = create_or_resume_output_file(df_master, base_name, output_dir_for_project)
+    
+    logging.info(f"📄 Output file: {os.path.basename(output_filepath)}")
+    logging.info(f"📊 Progress: {progress_info['labeled']}/{progress_info['total']} ({progress_info['percent']:.1f}%)")
+    
+    # Check if already complete
+    if progress_info['unlabeled'] == 0:
+        logging.warning(f"🎉 DATASET SUDAH SELESAI! Semua {progress_info['total']} baris sudah dilabeli.")
+        if session_manager:
+            session_manager.end_session(progress_info['total'])
+        return
 
-    total_rows = len(df_master)
+    prompt_template = load_prompt_template()
+    
+    # <<< OPTIMAL BATCH PROCESSING: Find batches to process >>>
+    batches_to_process = find_optimal_batches(working_df, batch_size)
+    
+    if not batches_to_process:
+        logging.warning(f"📋 Tidak ada batch yang perlu diproses. Semua batch sudah complete atau parsial.")
+        logging.info(f"💡 Gunakan batch size yang lebih kecil untuk memproses baris parsial, atau review manual untuk baris yang gagal.")
+        if session_manager:
+            session_manager.end_session(progress_info['total'])
+        return
+    
+    logging.info(f"🎯 Akan memproses {len(batches_to_process)} batch optimal dari total {progress_info['unlabeled']} baris belum dilabeli")
+
+    total_rows = len(working_df)
+    
+    # End of function - will be replaced with new implementation
+    logging.info("⚠️ Function implementation incomplete - needs update")
+    session_manager.end_session(total_rows)
     
     # Check if all batches are already processed by scanning existing batch files
     total_batches_expected = (total_rows + batch_size - 1) // batch_size  # Ceiling division

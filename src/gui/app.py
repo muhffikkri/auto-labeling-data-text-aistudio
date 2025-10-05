@@ -165,6 +165,33 @@ class LabelingApp(tk.Tk):
         self.stop_button.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
         # ---------------------------------------------------
 
+        # --- PROGRESS TRACKING SECTION ---
+        progress_frame = ttk.LabelFrame(self.main_tab, text="Progress Pelabelan", padding="10")
+        progress_frame.pack(fill=tk.X, pady=5)
+        progress_frame.columnconfigure((0, 1, 2, 3), weight=1)
+        
+        # Progress labels
+        ttk.Label(progress_frame, text="Total Baris:").grid(row=0, column=0, padx=5, pady=2, sticky="w")
+        self.total_rows_var = tk.StringVar(value="0")
+        ttk.Label(progress_frame, textvariable=self.total_rows_var, font=("Arial", 10, "bold")).grid(row=1, column=0, padx=5, pady=2)
+        
+        ttk.Label(progress_frame, text="Sudah Dilabeli:").grid(row=0, column=1, padx=5, pady=2, sticky="w")
+        self.labeled_rows_var = tk.StringVar(value="0")
+        ttk.Label(progress_frame, textvariable=self.labeled_rows_var, font=("Arial", 10, "bold"), foreground="green").grid(row=1, column=1, padx=5, pady=2)
+        
+        ttk.Label(progress_frame, text="Belum Dilabeli:").grid(row=0, column=2, padx=5, pady=2, sticky="w")
+        self.unlabeled_rows_var = tk.StringVar(value="0")
+        ttk.Label(progress_frame, textvariable=self.unlabeled_rows_var, font=("Arial", 10, "bold"), foreground="red").grid(row=1, column=2, padx=5, pady=2)
+        
+        ttk.Label(progress_frame, text="Progress:").grid(row=0, column=3, padx=5, pady=2, sticky="w")
+        self.progress_percent_var = tk.StringVar(value="0.0%")
+        ttk.Label(progress_frame, textvariable=self.progress_percent_var, font=("Arial", 10, "bold"), foreground="blue").grid(row=1, column=3, padx=5, pady=2)
+        
+        # Progress bar
+        self.progress_bar = ttk.Progressbar(progress_frame, mode='determinate', length=400)
+        self.progress_bar.grid(row=2, column=0, columnspan=4, padx=5, pady=5, sticky="ew")
+        # -----------------------------------
+
         # --- PERBAIKAN: Pindahkan Log Output ke sini ---
         # Frame untuk Log Output
         log_frame = ttk.LabelFrame(self.main_tab, text="Log Proses", padding="10")
@@ -597,7 +624,10 @@ Troubleshooting
         Hasil path file disimpan ke `self.filepath_var`.
         """
         filepath = filedialog.askopenfilename(title="Pilih file dataset", filetypes=[("All supported", ".csv .xlsx"), ("CSV files", "*.csv"), ("Excel files", "*.xlsx")])
-        if filepath: self.filepath_var.set(filepath)
+        if filepath: 
+            self.filepath_var.set(filepath)
+            # Update progress tracking for selected file
+            self.check_and_update_progress_from_file(filepath)
 
     def process_log_queue(self):  
         """
@@ -751,6 +781,87 @@ Troubleshooting
                 filesize_kb = round(os.path.getsize(f) / 1024, 2)
                 category = os.path.basename(os.path.dirname(f)) if subdir else "Final"
                 self.results_tree.insert("", "end", values=(filename, category.capitalize(), f"{filesize_kb} KB"))
+
+    def update_progress_tracking(self, total_rows=0, labeled_rows=0, unlabeled_rows=0, percent=0.0):
+        """
+        Update progress tracking display in main tab.
+        
+        Args:
+            total_rows (int): Total number of rows in dataset
+            labeled_rows (int): Number of rows already labeled
+            unlabeled_rows (int): Number of rows not yet labeled
+            percent (float): Progress percentage (0-100)
+        """
+        try:
+            self.total_rows_var.set(str(total_rows))
+            self.labeled_rows_var.set(str(labeled_rows))
+            self.unlabeled_rows_var.set(str(unlabeled_rows))
+            self.progress_percent_var.set(f"{percent:.1f}%")
+            
+            # Update progress bar (0-100 range)
+            self.progress_bar['value'] = percent
+            
+            # Force GUI update
+            self.update_idletasks()
+            
+        except Exception as e:
+            logging.error(f"Error updating progress tracking: {e}")
+
+    def check_and_update_progress_from_file(self, filepath_or_basename=None):
+        """
+        Check existing output file and update progress display.
+        
+        Args:
+            filepath_or_basename (str): File path or base name to check
+        """
+        try:
+            from src.core_logic.process import create_or_resume_output_file
+            import os
+            
+            if not filepath_or_basename:
+                filepath = self.filepath_var.get()
+                if not filepath:
+                    return
+                base_name = os.path.splitext(os.path.basename(filepath))[0]
+            else:
+                if os.path.exists(filepath_or_basename):
+                    base_name = os.path.splitext(os.path.basename(filepath_or_basename))[0]
+                else:
+                    base_name = filepath_or_basename
+            
+            # Get settings for output directory
+            settings, _ = env_manager.load_env_variables()
+            output_dir = os.path.join(settings.get("OUTPUT_DIR", "results"), base_name)
+            
+            if not os.path.exists(output_dir):
+                # No output directory yet, show zeros
+                self.update_progress_tracking(0, 0, 0, 0.0)
+                return
+            
+            # Create dummy master df to get progress info
+            try:
+                # Try to load original dataset to get total count
+                dataset_dir = os.path.dirname(self.filepath_var.get()) if self.filepath_var.get() else "."
+                from src.core_logic.process import open_dataset
+                df_master, _ = open_dataset(dataset_dir, base_name)
+                
+                # Check progress from output file
+                _, _, progress_info = create_or_resume_output_file(df_master, base_name, output_dir)
+                
+                self.update_progress_tracking(
+                    total_rows=progress_info['total'],
+                    labeled_rows=progress_info['labeled'],
+                    unlabeled_rows=progress_info['unlabeled'], 
+                    percent=progress_info['percent']
+                )
+                
+            except Exception as e:
+                logging.debug(f"Could not check progress from file: {e}")
+                self.update_progress_tracking(0, 0, 0, 0.0)
+                
+        except Exception as e:
+            logging.error(f"Error checking progress from file: {e}")
+            self.update_progress_tracking(0, 0, 0, 0.0)
 
     def browse_token_file(self):
         """Membuka file dialog untuk memilih dataset untuk analisis token."""
