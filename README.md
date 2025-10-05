@@ -1,8 +1,6 @@
 # Aplikasi Pelabelan Data Otomatis dengan Gemini
 
-Ini adalah aplikasi desktop yang dirancang untuk mempercepat dan mengotomatiskan proses pelabelan data teks (seperti sentimen tweet atau ulasan produk) menggunakan Google Gemini API. Model Gemini dikenal memiliki kemampuan _reasoning_ yang kuat, sehingga cocok digunakan untuk tugas-tugas yang memerlukan pemahaman konteks yang mendalam. Dalam aplikasi ini, kemampuan tersebut dimanfaatkan untuk memahami nuansa dalam teks, menghasilkan label yang akurat, dan memberikan justifikasi untuk setiap keputusannya.
-
-Aplikasi ini dibangun dalam bentuk **graphical user interface** (GUI) dengan fitur-fitur seperti proses yang dapat dilanjutkan (resumeable), validasi output AI, dan konfigurasi yang sepenuhnya dinamis.
+Aplikasi desktop GUI untuk otomatisasi pelabelan data teks menggunakan Google Gemini API. Dilengkapi dengan fitur resume capability, single file output, progress tracking real-time, dan batch optimization untuk efisiensi quota.
 
 ![Contoh Screenshot Aplikasi](screenshot/screenshot_app.png)
 
@@ -10,247 +8,368 @@ Aplikasi ini dibangun dalam bentuk **graphical user interface** (GUI) dengan fit
 
 ## ✨ Fitur Utama
 
-- **Setup Sekali Klik**: Jalankan satu file (`start.bat` atau `start.sh`) untuk menyiapkan _virtual environment_ dan menginstal semua dependensi secara otomatis.
-- **Graphical User Interface (GUI)**: Operasikan semua fitur melalui jendela aplikasi dengan sistem Tab yang terorganisir.
-- **Konfigurasi Dinamis**: Atur model AI, direktori, dan API key langsung dari **Tab Pengaturan**, serta tentukan nama kolom teks target dari **Tab Proses Utama**.
-- **Editor Prompt Terintegrasi**: Modifikasi dan simpan instruksi untuk AI secara _real-time_ dari dalam **Tab Editor Prompt**.
-- **Validasi Label Cerdas**: Tentukan sendiri label yang Anda inginkan (misal: "positif, negatif"), dan aplikasi akan otomatis mencoba ulang jika AI memberikan output yang tidak sesuai.
-- **Proses Latar Belakang & Kontrol Penuh**: Proses pelabelan berjalan di _thread_ terpisah agar aplikasi tetap responsif, lengkap dengan tombol "Hentikan Proses".
-- **Dapat Dilanjutkan (_Resumable_)**: Jika proses berhenti, aplikasi akan melanjutkan dari _checkpoint_ terakhir tanpa kehilangan progres.
-- **Monitoring & Bantuan Terintegrasi**: Pantau log secara _real-time_, lihat ringkasan hasil pekerjaan, dan baca panduan penggunaan langsung di dalam aplikasi.
+### 🚀 **Core Features**
+- **Setup Sekali Klik**: Automated environment setup dengan `start.bat`/`start.sh`
+- **Modern GUI Interface**: 8 tab terorganisir untuk workflow lengkap
+- **Single File Output**: Format `namafile_labeled_YYYYMMDD_HHMMSS.xlsx` di `results/`
+- **Resume Capability**: Auto-resume dari posisi terakhir tanpa kehilangan progress
+- **Progress Tracking**: Real-time display total/labeled/unlabeled rows + progress bar
+- **Batch Optimization**: Skip complete/partial batches, fokus pada empty batches
+
+### 🎯 **Advanced Features**
+- **Token Analysis**: Estimasi biaya dan optimasi batch size sebelum processing
+- **Request Tracking**: Comprehensive monitoring dengan session management
+- **Multiple API Keys**: Auto-rotation untuk maximize throughput
+- **Model Fallback System**: Auto-switch model ketika quota habis
+- **Chat Tester**: Test prompt dan validasi output format sebelum processing
+- **Configurable Everything**: Dynamic config tanpa restart aplikasi
 
 ---
 
-## 🚀 Workflow Aplikasi
+## 🖥️ Interface Overview
 
-Aplikasi ini dirancang untuk digunakan sepenuhnya melalui GUI.
+### **Tab 1: Proses Utama**
+- File dataset input (CSV/XLSX)
+- Nama kolom teks dan label yang diizinkan
+- Ukuran batch dan kontrol start/stop
+- **Progress tracking**: Total, labeled, unlabeled, percentage dengan progress bar
+- Real-time logging
 
-### Langkah 1: Setup Awal (Hanya Sekali)
+### **Tab 2: Analisis Token** 
+- Token analysis untuk estimasi biaya
+- Test batch size optimal
+- Request langsung ke model untuk akurasi
+- Rekomendasi konfigurasi
 
-Pastikan Anda sudah **menginstal Python 3** di komputer Anda.
+### **Tab 3: Statistik Request**
+- Session monitoring dan request tracking
+- Success rate dan performance metrics
+- API key usage statistics
 
-1.  **Jalankan Skrip Peluncur**:
-
-    - **Windows**: Klik dua kali file **`start.bat`**.
-    - **macOS / Linux**: Buka Terminal, jalankan `chmod +x start.sh` (hanya sekali), lalu jalankan `./start.sh`.
-
-    Skrip ini akan secara otomatis membuat _environment_, menginstal semua yang dibutuhkan, lalu membuka jendela aplikasi.
-
-### Langkah 2: Konfigurasi & Proses di Dalam Aplikasi
-
-Setelah aplikasi terbuka, ikuti alur kerja ini:
-
-1.  **Tab `Pengaturan`**: Masukkan **API Key Google** Anda dan sesuaikan konfigurasi lainnya. Klik **"Simpan"**.
-2.  **Tab `Editor Prompt`**: Sesuaikan instruksi untuk AI. Pastikan format output yang diminta adalah `Label - Justifikasi`. Klik **"Simpan"**.
-3.  **Tab `Chat Tester`**: (Opsional tapi direkomendasikan) Uji coba _prompt_ Anda dengan beberapa contoh teks untuk memastikan AI memberikan output sesuai format.
-4.  **Tab `Proses Utama`**:
-    - Pilih **File Dataset** Anda.
-    - Masukkan **Nama Kolom Teks** yang benar.
-    - Masukkan **Label yang Diizinkan** (dipisah koma), pastikan sinkron dengan _prompt_.
-    - Atur **Ukuran Batch** (lihat tips di bawah).
-5.  **Mulai Proses**: Klik **"Mulai Proses Pelabelan"**.
+### **Tab 4-8: Tools & Configuration**
+- Editor prompt, chat tester, hasil pelabelan
+- Pengaturan model dan API keys
+- Help dan documentasi
 
 ---
 
-## 💡 Tips Penting & Best Practice
+## 🚀 Quick Start
 
-### 1. Uji Coba Prompt Terlebih Dahulu!
+### Windows
+```bash
+# Download dan jalankan
+git clone https://github.com/muhffikkri/auto-labeling-data-text-aistudio.git
+cd auto-labeling-data-text-aistudio
 
-Sebelum menjalankan pelabelan pada ribuan data, gunakan **Tab `Chat Tester`**.
+# Klik dua kali start.bat atau:
+start.bat
+```
 
-- **Verifikasi Format**: Pastikan model AI benar-benar mengeluarkan output `Label - Justifikasi`. Jika tidak, perbaiki instruksi Anda di **Tab `Editor Prompt`**.
-- **Hemat Kuota**: Melakukan verifikasi ini mencegah kegagalan format berulang di tengah proses pelabelan, yang akan membuang-buang kuota API Anda.
-- **Konteks Stateless**: Ingat, API ini bersifat **stateless**. Model tidak mengingat permintaan sebelumnya. Oleh karena itu, seluruh instruksi (konteks) harus ada di dalam _prompt_ setiap kali permintaan dikirim.
+### macOS/Linux
+```bash
+# Download dan jalankan
+git clone https://github.com/muhffikkri/auto-labeling-data-text-aistudio.git
+cd auto-labeling-data-text-aistudio
 
-### 2. Memilih Ukuran Batch yang Tepat
+# Setup permission dan jalankan
+chmod +x start.sh
+./start.sh
+```
 
-Ukuran batch adalah _trade-off_. Tidak ada satu angka yang sempurna, jadi pilihlah berdasarkan kebutuhan Anda:
-
-- **Batch Kecil (misal: 20-100)**:
-  - **Kelebihan**: Sangat aman dari **limit token**. Model seperti `gemini-1.5-pro` memiliki batas token (misal: 32.768). Jika total teks dalam satu batch melebihi batas ini, permintaan akan gagal. Batch kecil mencegah ini.
-  - **Kekurangan**: Menghasilkan lebih banyak permintaan API. Jika Anda memiliki batasan request per minute/day (RPM/RPD), ini bisa lebih cepat tercapai.
-- **Batch Besar (misal: 200-500)**:
-  - **Kelebihan**: Lebih sedikit permintaan API, lebih efisien dalam penggunaan kuota RPD.
-  - **Kekurangan**: Berisiko tinggi mengalami **limit token**, terutama jika teks Anda panjang-panjang.
-
-**Rekomendasi**: Mulailah dengan batch kecil (misal: **50**), dan jika berjalan lancar tanpa error token, Anda bisa mencoba menaikkannya secara bertahap.
-
-### 3. Kustomisasi Prompt untuk Akurasi
-
-Kualitas pelabelan bergantung sepenuhnya pada prompt Anda di **Tab `Editor Prompt`**.
-
-- **Jadilah Spesifik**: Berikan contoh yang relevan dengan konteks data Anda.
-- **Sinkronkan Label**: Pastikan daftar label di _prompt_ sama dengan yang Anda masukkan di _field_ "Label yang Diizinkan" di GUI.
+### Workflow Pertama Kali
+1. **Tab Pengaturan**: Input Google API Key dan save
+2. **Tab Editor Prompt**: Sesuaikan prompt untuk use case Anda
+3. **Tab Chat Tester**: Test prompt dengan sample data
+4. **Tab Analisis Token**: Analisis biaya dan optimasi batch size
+5. **Tab Proses Utama**: Select file, configure, dan mulai processing
 
 ---
 
-### Format Dataset
+## 📊 Single File Output & Resume System
 
-- Aplikasi mendukung file `.csv` atau `.xlsx`.
-- Pastikan file Anda memiliki kolom teks yang namanya Anda masukkan di _field_ "Nama Kolom Teks" di GUI.
+### **Konsep Utama**
+```
+Dataset Original → Copy ke results/ → Update in-place → Single file output
+```
 
-## 📂 Struktur Proyek
+### **Format Output**
+```
+results/project_name/
+└── project_name_labeled_20251005_143022.xlsx
+```
 
-```.
-├── src/
-│   ├── core_logic/
-│   │   ├── env_manager.py
-│   │   ├── process.py
-│   │   ├── utils.py
-│   │   ├── check_tokens.py      # Token analysis tool
-│   │   └── list_models.py       # Model information tool
-│   └── gui/
-│       └── app.py
-├── dataset/
-│   └── data_sample/
-├── results/
-├── logs/
-├── tests/                       # Testing framework
-│   ├── unit/
-│   ├── integration/
-│   └── conftest.py
-├── main.py
-├── tools.py                     # Utilities wrapper
-├── start.bat
-├── start.sh
-├── .env
-├── .env.example
-├── env_example_fallback.txt     # Model fallback config example
-├── prompt_template.txt
-├── requirements.txt
-└── requirements-dev.txt         # Development dependencies
+### **Resume Logic**
+- **Auto-detect**: Scan existing output files otomatis
+- **Progress analysis**: Hitung baris labeled vs unlabeled
+- **Smart resume**: Lanjutkan dari batch yang belum complete
+- **Batch optimization**: Skip complete/partial batches untuk efisiensi quota
+
+### **Progress Tracking**
+- **Total Baris**: Counter total dataset
+- **Sudah Dilabeli**: Progress yang sudah selesai (hijau) 
+- **Belum Dilabeli**: Remaining work (merah)
+- **Progress %**: Persentase dengan visual progress bar
+- **Real-time updates**: Update otomatis saat processing
+
+---
+
+## 💡 Best Practices
+
+### **1. Optimasi Batch Size**
+```bash
+# Analisis dulu sebelum processing
+Tab Analisis Token → Input dataset → Test batch sizes → Pilih optimal
+
+# Trade-off considerations:
+- Batch kecil (20-50): Aman dari token limit, tapi banyak API calls
+- Batch besar (100-300): Efisien quota, tapi risiko token limit
+- Sweet spot: 50-100 untuk most cases
+```
+
+### **2. Efficient Resume Strategy**
+```
+Processing interrupted → Next run auto-resume → Skip completed batches
+```
+
+### **3. Prompt Optimization**
+```bash
+# Always test first:
+Tab Editor Prompt → Customize → Tab Chat Tester → Validate → Process
+
+# Key points:
+- Spesifik format output: "Label - Justifikasi"
+- Sinkronkan dengan "Label yang Diizinkan"
+- Include relevant examples
+```
+
+### **4. Quota Management**
+```bash
+# Multiple API keys untuk throughput maksimal
+.env file:
+GOOGLE_API_KEY_1="key1"
+GOOGLE_API_KEY_2="key2"
+GOOGLE_API_KEY_3="key3"
+
+# Model fallback untuk continuity
+MODEL_FALLBACK_LIST="gemini-2.5-pro,gemini-1.5-pro,gemini-1.5-flash"
 ```
 
 ---
 
-## 🔧 Utilitas & Tools
+## 🔧 Configuration Guide
 
-Proyek ini dilengkapi dengan beberapa tool utilitas untuk analisis dan perencanaan:
-
-### 1. Token Analysis Tool
-
-Analisis jumlah token dan estimasi biaya sebelum menjalankan proses pelabelan:
-
+### **Environment Setup (.env)**
 ```bash
-# Analisis dataset dengan tool wrapper
-python tools.py check-tokens --dataset my_tweets --column tweet_text --batch-size 300
+# Core Configuration
+MODEL_NAME="gemini-1.5-pro-latest"
+OUTPUT_DIR="results"
+DATASET_DIR="datasets"
 
-# Atau langsung dengan module
-python -m src.core_logic.check_tokens --dataset my_tweets --column tweet_text
+# Multiple API Keys (auto-rotation)
+GOOGLE_API_KEY_1="your_primary_key_here"
+GOOGLE_API_KEY_2="your_secondary_key_here" 
+GOOGLE_API_KEY_3="your_tertiary_key_here"
+
+# Model Fallback (auto-switch when quota exhausted)
+MODEL_FALLBACK_LIST="gemini-2.5-pro,gemini-1.5-pro,gemini-1.5-flash"
+
+# Optional Advanced Settings
+MAX_RETRIES=3
+TIMEOUT_SECONDS=30
+LOG_LEVEL="INFO"
+ENABLE_REQUEST_TRACKING=true
+ENABLE_SESSION_LOGGING=true
 ```
 
-**Output:**
+### **Prompt Template Structure**
+```
+Anda adalah expert annotator untuk [domain]. 
 
-- Total token input per batch
-- Estimasi biaya berdasarkan model
-- Proyeksi biaya untuk seluruh dataset
-- Rekomendasi batch size
+Tugas: Labeli teks dengan kategori: [list_labels]
 
-### 2. Model Information Tool
+Format Output WAJIB: "Label - Justifikasi"
 
-Lihat daftar model Gemini yang tersedia dan informasi quota:
+Contoh:
+Input: "Produk ini mengecewakan sekali"
+Output: "negatif - Menggunakan kata 'mengecewakan' yang menunjukkan ketidakpuasan"
 
+Teks untuk dilabeli:
+{data_to_process}
+```
+
+---
+
+## 🛠️ Tools & Utilities
+
+### **Token Analysis Tool**
 ```bash
-# Daftar model ringkas
+# Via GUI: Tab Analisis Token
+# Via CLI:
+python tools.py check-tokens --dataset tweets --column text --batch-size 100
+
+# Output: Token count, cost estimation, batch recommendations
+```
+
+### **Model Information**
+```bash
+# List available models
 python tools.py list-models
 
-# Detail lengkap setiap model
+# With quota details
 python tools.py list-models --show-details
 
-# Generate konfigurasi model fallback
+# Generate fallback config
 python tools.py list-models --generate-config
-
-# Cek akses ke model (perlu API key)
-python tools.py list-models --check-access
 ```
 
-**Output:**
+### **Session Analysis**
+```bash
+# View session history
+python -m src.core_logic.session_viewer
 
-- Daftar model dengan quota (RPM/TPM/RPD)
-- Rekomendasi pemilihan model
-- Konfigurasi fallback yang optimal
-- Status akses untuk setiap model
+# Analyze specific session
+python -m src.core_logic.session_viewer --session session_20251005_143022
+```
 
-### 3. Model Fallback System
+---
 
-Sistem fallback otomatis untuk memaksimalkan throughput harian:
+## 📂 Project Structure
+
+```
+auto-labeling-data-text-aistudio/
+├── src/
+│   ├── core_logic/           # Core processing logic
+│   │   ├── process.py        # Main labeling orchestration
+│   │   ├── request_tracker.py   # Request monitoring
+│   │   ├── session_manager.py   # Session logging
+│   │   ├── check_tokens.py   # Token analysis tool
+│   │   └── list_models.py    # Model information tool
+│   └── gui/
+│       └── app.py           # GUI application
+├── datasets/                # Input datasets
+│   └── data_sample/
+├── results/                 # Output results
+├── logs/                   # Session and error logs
+├── tests/                  # Testing framework
+├── .env                    # Configuration file
+├── .env.example           # Configuration template
+├── main.py                # Application entry point
+├── tools.py               # CLI utilities wrapper
+├── start.bat / start.sh   # Setup scripts
+└── requirements.txt       # Dependencies
+```
+
+---
+
+## 🧪 Testing Framework
 
 ```bash
-# Setup di file .env
-MODEL_FALLBACK_LIST="gemini-2.5-pro,gemini-2.5-flash,gemini-2.5-flash-lite"
+# Run all tests
+pytest
+
+# Unit tests only  
+pytest tests/unit/
+
+# Integration tests
+pytest tests/integration/
+
+# Specific test
+pytest tests/unit/test_process_utils.py -v
 ```
 
-**Fitur:**
+---
 
-- Otomatis beralih model ketika quota habis
-- Start dengan model terbaik, fallback ke alternatif
-- Zero downtime switching
-- Comprehensive logging
+## 📈 Performance & Monitoring
+
+### **Session Tracking**
+- Comprehensive logging di `logs/sessions/`
+- Request metrics dan success rates
+- Performance analytics per session
+- Error tracking dan resolution
+
+### **Request Monitoring**
+- Real-time statistics di Tab Statistik Request
+- API key usage distribution
+- Response time tracking
+- Quota utilization monitoring
+
+### **File Management**
+- Single file output untuk easy management
+- Atomic saves untuk data integrity
+- Resume capability untuk reliability
+- Progress persistence across sessions
 
 ---
 
-## 🛠️ Manual Setup (Untuk Developer)
+## 🚨 Troubleshooting
 
-Jika Anda lebih suka menjalankan proyek secara manual atau ingin melakukan pengembangan, ikuti langkah-langkah berikut:
+### **Common Issues**
 
-### 1. Prasyarat
+**Q: Processing terhenti/hanging**
+```bash
+A: System sudah dilengkapi deadlock protection dan timeout mechanisms
+   - Check Tab Statistik Request untuk monitoring
+   - Restart aplikasi untuk reset state
+   - Periksa logs/ untuk error details
+```
 
-- **Python 3.8+** terinstal.
-- **Git** terinstal.
+**Q: Token limit exceeded**
+```bash
+A: Reduce batch size di Tab Analisis Token
+   - Test optimal batch size first
+   - Consider shorter texts atau smaller batches
+   - Check model limits di documentation
+```
 
-### 2. Langkah-langkah
+**Q: API quota habis**
+```bash  
+A: Setup multiple API keys dan model fallback
+   - Add more keys di .env file
+   - Enable MODEL_FALLBACK_LIST
+   - Monitor usage di Tab Statistik Request
+```
 
-1.  **Clone Repositori**:
-    Buka terminal atau Git Bash dan jalankan perintah berikut:
+### **Debug Mode**
+```bash
+# Enable detailed logging
+LOG_LEVEL="DEBUG"
 
-    ```bash
-    git clone https://github.com/muhffikkri/auto-labeling-data-text-aistudio.git
-    cd auto-labeling-data-text-aistudio
-    ```
-
-2.  **Buat Virtual Environment**:
-    Sangat disarankan untuk menggunakan _virtual environment_ agar dependensi proyek tidak tercampur dengan instalasi Python global Anda.
-
-    ```bash
-    python -m venv venv
-    ```
-
-3.  **Aktifkan Environment**:
-
-    - **Windows**:
-      ```bash
-      venv\Scripts\activate
-      ```
-    - **macOS / Linux**:
-      ```bash
-      source venv/bin/activate
-      ```
-
-    Anda akan melihat `(venv)` di awal baris terminal Anda jika berhasil.
-
-4.  **Install Dependensi**:
-    Gunakan `pip` untuk menginstal semua _library_ yang dibutuhkan dari file `requirements.txt`.
-
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-5.  **Konfigurasi `.env`**:
-    Salin file contoh `.env.example` menjadi `.env` baru.
-
-    ```bash
-    # Windows
-    copy .env.example .env
-    # macOS / Linux
-    cp .env.example .env
-    ```
-
-    Buka file `.env` yang baru dibuat dan isi dengan API Key serta konfigurasi lain yang Anda perlukan.
-
-6.  **Jalankan Aplikasi**:
-    Setelah semua persiapan selesai, jalankan aplikasi menggunakan file `main.py`.
-    ```bash
-    python main.py
-    ```
+# Check specific logs
+tail -f logs/labeling_*.log
+tail -f logs/sessions/session_*/session.log
+```
 
 ---
+
+## 🤝 Contributing
+
+```bash
+# Development setup
+git clone <repo>
+pip install -r requirements-dev.txt
+
+# Run tests
+pytest
+
+# Code formatting  
+black src/ tests/
+flake8 src/ tests/
+
+# Type checking
+mypy src/
+```
+
+---
+
+## 📄 License
+
+MIT License - see LICENSE file for details.
+
+---
+
+## 🆘 Support
+
+- **Issues**: GitHub Issues untuk bug reports
+- **Discussions**: GitHub Discussions untuk questions
+- **Documentation**: Tab Help di dalam aplikasi
+- **CLI Help**: `python tools.py --help`

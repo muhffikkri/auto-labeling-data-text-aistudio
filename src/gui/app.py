@@ -404,93 +404,141 @@ class LabelingApp(tk.Tk):
         Menampilkan teks panduan cepat, mekanisme aplikasi,
         serta persyaratan dataset.
         """
-        help_text_content = """Selamat Datang di Aplikasi Pelabelan Otomatis!
+        help_text_content = """🚀 Aplikasi Pelabelan Data Otomatis dengan Gemini
 
-Aplikasi ini dirancang untuk mempermudah proses pelabelan data teks dalam jumlah besar menggunakan Google AI (Gemini).
-
-===============================
-Panduan Cepat (Workflow)
-===============================
-1.  Tab Pengaturan: Pastikan semua konfigurasi (nama model, direktori, API key) sudah benar. Klik "Simpan" jika Anda melakukan perubahan.
-2.  Tab Analisis Token: Gunakan untuk menganalisis biaya token sebelum memulai pelabelan besar-besaran.
-3.  Tab Proses Utama: Klik "Pilih File..." untuk memilih dataset Anda.
-4.  Tab Proses Utama: Atur "Ukuran Batch" (jumlah baris per permintaan API). Nilai yang lebih kecil (misal: 20-50) lebih aman dari error token limit.
-5.  Klik "Mulai Proses Pelabelan".
-6.  Pantau log di Tab Proses Utama dan lihat file yang dihasilkan di Tab Hasil.
-7.  Tab Statistik Request: Monitor penggunaan quota dan performa API secara real-time.
-8.  Jika perlu, klik "Hentikan Proses". Proses akan berhenti dengan aman setelah batch saat ini selesai.
+Aplikasi desktop GUI untuk otomatisasi pelabelan data teks dengan fitur resume capability, 
+single file output, progress tracking real-time, dan batch optimization.
 
 ===============================
-Fitur-Fitur Aplikasi
+🎯 Quick Start (5 Langkah)
 ===============================
-📊 Tab Analisis Token:
--   Analisis biaya token sebelum memulai pelabelan
--   Estimasi biaya berdasarkan ukuran batch dan dataset
--   Request langsung ke model untuk akurasi maksimal
-
-📈 Tab Statistik Request:
--   Monitor penggunaan quota per model dan API key
--   Tracking success rate dan response time
--   Prediksi kapan akan mencapai limit harian
--   Export statistik untuk analisis lebih lanjut
-
-🤖 Tab Chat Tester:
--   Test prompt secara langsung ke model Gemini
--   Debugging dan fine-tuning prompt template
-
-📝 Tab Editor Prompt:
--   Edit template prompt secara visual
--   Save/load template dengan mudah
+1. Tab Pengaturan → Input Google API Key → Save
+2. Tab Editor Prompt → Sesuaikan prompt untuk use case Anda  
+3. Tab Chat Tester → Test prompt dengan sample data
+4. Tab Analisis Token → Analisis biaya dan optimasi batch size
+5. Tab Proses Utama → Select file, configure, dan mulai processing
 
 ===============================
-Mekanisme Aplikasi
+✨ Fitur Utama
 ===============================
--   Batching: Data Anda tidak dikirim sekaligus, melainkan dalam potongan-potongan kecil (batch) untuk efisiensi dan menghindari limit API.
--   Model Fallback: Otomatis beralih ke model lain jika quota habis
--   Checkpoint: Setelah setiap batch berhasil diproses, hasilnya langsung disimpan sebagai file Excel kecil. Jika aplikasi error atau ditutup, Anda bisa menjalankannya lagi tanpa kehilangan progres.
--   Rotasi API Key: Jika Anda memasukkan lebih dari satu API key dan terjadi error kuota, aplikasi akan otomatis beralih ke key berikutnya.
--   Request Tracking: Semua request ke API dicatat dengan detail untuk monitoring dan debugging.
--   Logging: Semua aktivitas, peringatan, dan error dicatat di Tab Proses Utama dan juga disimpan permanen di folder `logs/`.
+� Single File Output & Resume:
+-   Format: namafile_labeled_YYYYMMDD_HHMMSS.xlsx
+-   Auto-resume dari posisi terakhir tanpa kehilangan progress  
+-   Skip completed/partial batches untuk efisiensi quota
+-   Real-time progress tracking: Total/Labeled/Unlabeled + %
+
+📊 Progress Tracking:
+-   Progress bar visual dengan persentase real-time
+-   Counter: Total baris, sudah dilabeli, belum dilabeli
+-   Update otomatis saat processing berlangsung
+
+🔧 Batch Optimization:
+-   Smart resume: lanjutkan dari batch yang belum complete
+-   Skip optimization untuk quota efficiency  
+-   Batch size analysis dengan token estimation
+
+⚙️ Advanced Features:
+-   Multiple API keys dengan auto-rotation
+-   Model fallback system (gemini-2.5-pro → gemini-1.5-pro → gemini-1.5-flash)
+-   Request tracking dengan session management
+-   Token analysis untuk cost estimation
 
 ===============================
-Persyaratan Dataset
+🖥️ Interface Overview  
 ===============================
--   Format file harus .csv atau .xlsx.
--   WAJIB memiliki kolom dengan nama yang sesuai (default: `full_text`) yang berisi teks untuk dilabeli.
--   Pastikan tidak ada data kosong pada kolom teks yang akan diproses.
+Tab 1: Proses Utama
+-   File input, batch config, start/stop controls
+-   Progress tracking dengan visual progress bar
+-   Real-time logging dan status monitoring
 
-===============================
-Tips Optimasi
-===============================
-🔋 Efisiensi Biaya:
--   Gunakan Tab Analisis Token untuk estimasi biaya sebelum pelabelan besar
--   Pilih ukuran batch optimal (50-100 untuk dataset besar)
--   Monitor quota melalui Tab Statistik Request
+Tab 2: Analisis Token
+-   Cost estimation dan batch size optimization
+-   Test batch size optimal sebelum processing
 
-⚡ Performance:
--   Gunakan model fallback list untuk throughput maksimal
--   Monitor response time di Tab Statistik Request
--   Auto-refresh statistics untuk monitoring real-time
+Tab 3: Statistik Request  
+-   Session monitoring dan API usage statistics
+-   Success rate dan performance metrics
 
-🛡️ Reliability:
--   Setup multiple API keys untuk redundancy
--   Gunakan checkpoint system untuk resume otomatis
--   Monitor error rate melalui statistik
+Tab 4-8: Tools & Config
+-   Editor prompt, chat tester, hasil pelabelan
+-   Model settings dan API key management
 
 ===============================
-Troubleshooting
+📂 Single File Output System
 ===============================
-❌ Error Token Limit:
--   Kurangi ukuran batch
--   Cek Tab Analisis Token untuk estimasi yang akurat
+Konsep: Dataset Original → Copy ke results/ → Update in-place
 
-❌ Error Quota:
--   Cek Tab Statistik Request untuk melihat penggunaan
--   Tambah API key atau gunakan model fallback
+Output Directory:
+results/project_name/
+└── project_name_labeled_20251005_143022.xlsx
 
-❌ Error Dataset:
--   Pastikan nama kolom sesuai
--   Cek format file (CSV/XLSX only)
+Resume Logic:
+✅ Auto-detect existing output files
+✅ Progress analysis: hitung baris labeled vs unlabeled  
+✅ Smart resume: lanjutkan dari batch yang belum complete
+✅ Batch optimization: skip complete/partial batches
+
+===============================
+⚡ Best Practices
+===============================
+🎯 Workflow Optimal:
+1. Analisis Token dulu → Test batch sizes → Pilih optimal
+2. Multiple API keys untuk throughput maksimal  
+3. Gunakan model fallback untuk continuity
+4. Monitor progress tracking untuk efficiency
+
+🔋 Batch Size Guide:
+-   Kecil (20-50): Aman dari token limit, banyak API calls
+-   Sedang (50-100): Sweet spot untuk most cases
+-   Besar (100-300): Efisien quota, risiko token limit
+
+⚙️ Configuration:
+-   Setup .env file dengan multiple API keys
+-   Enable model fallback list
+-   Optimize batch size berdasarkan dataset
+
+===============================
+🛠️ Troubleshooting
+===============================
+❌ Processing Terhenti:
+→ System sudah dilengkapi deadlock protection
+→ Check Tab Statistik Request untuk monitoring  
+→ Restart aplikasi untuk reset state
+
+❌ Token Limit Exceeded:
+→ Reduce batch size di Tab Analisis Token
+→ Test optimal batch size terlebih dahulu
+
+❌ API Quota Habis:
+→ Setup multiple API keys di .env file
+→ Enable MODEL_FALLBACK_LIST 
+→ Monitor usage di Tab Statistik Request
+
+❌ Resume Tidak Berfungsi:
+→ Pastikan file output masih ada di results/
+→ Check format nama file: namafile_labeled_YYYYMMDD_HHMMSS.xlsx
+→ Sistem akan auto-detect dan resume otomatis
+
+===============================
+📁 File Requirements
+===============================
+Dataset Input:
+✅ Format: .csv atau .xlsx
+✅ Kolom teks wajib ada (default: 'full_text')
+✅ No empty data pada kolom yang diproses
+
+Configuration:
+✅ .env file dengan API keys
+✅ prompt_template.txt untuk custom prompts
+✅ results/ directory untuk outputs
+
+===============================
+🔗 Resources
+===============================
+📖 Documentation: README.md (comprehensive guide)
+⚙️ Configuration: .env.example (setup template)  
+🧪 Testing: pytest untuk validation
+🔧 CLI Tools: python tools.py --help
 """
         help_frame = ttk.Frame(self.help_tab, padding="10")
         help_frame.pack(fill=tk.BOTH, expand=True)
