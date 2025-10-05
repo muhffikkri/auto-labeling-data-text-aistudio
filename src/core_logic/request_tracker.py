@@ -87,6 +87,15 @@ class RequestTracker:
         self.requests_per_model = defaultdict(int)
         self.success_per_model = defaultdict(int)
         
+        # API stats tracking - NEW
+        self.api_stats = defaultdict(lambda: {
+            'total_requests': 0,
+            'successful_requests': 0,
+            'failed_requests': 0,
+            'total_tokens': 0,
+            'total_cost': 0.0
+        })
+        
         # Response time tracking
         self.response_times = deque(maxlen=1000)  # Keep last 1000 response times
         
@@ -135,12 +144,22 @@ class RequestTracker:
                 self.successful_requests += 1
                 self.success_per_api_key[api_key_index] += 1
                 self.success_per_model[model_name] += 1
+                self.api_stats[api_key_index]['successful_requests'] += 1
             else:
                 self.failed_requests += 1
+                self.api_stats[api_key_index]['failed_requests'] += 1
             
             self.requests_per_api_key[api_key_index] += 1
             self.requests_per_model[model_name] += 1
             self.response_times.append(response_time)
+            
+            # Update API stats
+            self.api_stats[api_key_index]['total_requests'] += 1
+            if tokens_used:
+                self.api_stats[api_key_index]['total_tokens'] += tokens_used
+                # Estimate cost - rough calculation for Gemini models
+                estimated_cost = tokens_used * 0.000002  # Rough estimate
+                self.api_stats[api_key_index]['total_cost'] += estimated_cost
             
             # Store in session requests
             self.current_session_requests.append(metrics)
@@ -269,25 +288,51 @@ class RequestTracker:
     def generate_report(self, detailed: bool = True) -> str:
         """Generate formatted report"""
         stats = self.get_current_stats()
-        quota_pred = self.get_quota_predictions()
+        
+        # Handle potential errors in stats
+        if isinstance(stats, dict) and "error" in stats:
+            return f"❌ Error retrieving stats: {stats.get('error', 'Unknown error')}"
+        
+        # Format session duration
+        session_duration = stats.get('session_duration', 0)
+        duration_str = str(timedelta(seconds=int(session_duration)))
+        
+        # Calculate success rate
+        total_requests = stats.get('total_requests', 0)
+        successful_requests = stats.get('successful_requests', 0)
+        success_rate = (successful_requests / total_requests * 100) if total_requests > 0 else 0
+        
+        # Calculate average response time
+        avg_response_time = sum(self.response_times) / len(self.response_times) if self.response_times else 0
         
         report_lines = [
             "=" * 80,
             "🔍 REQUEST TRACKING REPORT",
             "=" * 80,
             "",
-            f"📅 Session: {stats['session_info']['duration_formatted']} (started: {stats['session_info']['start_time'][:19]})",
-            f"📊 Total Requests: {stats['request_counts']['total_requests']}",
-            f"✅ Success Rate: {stats['request_counts']['success_rate']:.1f}% ({stats['request_counts']['successful_requests']}/{stats['request_counts']['total_requests']})",
-            f"⚡ Avg Response Time: {stats['performance']['avg_response_time']:.2f}s",
-            f"🚀 Request Rate: {stats['performance']['requests_per_minute']:.1f} req/min",
+            f"📅 Session Duration: {duration_str}",
+            f"📊 Total Requests: {total_requests}",
+            f"✅ Success Rate: {success_rate:.1f}% ({successful_requests}/{total_requests})",
+            f"❌ Failed Requests: {stats.get('failed_requests', 0)}",
+            f"⚡ Avg Response Time: {avg_response_time:.2f}s",
+            f"🚀 Request Rate: {stats.get('requests_per_minute', 0):.1f} req/min",
+            f"🪙 Total Tokens: {stats.get('total_tokens', 0):,}",
+            f"💰 Total Cost: ${stats.get('total_cost', 0):.6f}",
             "",
             "🔑 API KEY STATISTICS:",
             "-" * 40
         ]
         
-        for api_key, api_stats in stats['api_key_stats'].items():
-            report_lines.append(f"{api_key}: {api_stats['total_requests']} requests ({api_stats['success_rate']:.1f}% success)")
+        # Add API stats if available
+        api_stats = stats.get('api_stats', {})
+        if api_stats:
+            for api_key, api_data in api_stats.items():
+                total_req = api_data.get('total_requests', 0)
+                success_req = api_data.get('successful_requests', 0)
+                api_success_rate = (success_req / total_req * 100) if total_req > 0 else 0
+                report_lines.append(f"API {api_key}: {total_req} requests ({api_success_rate:.1f}% success)")
+        else:
+            report_lines.append("No API key statistics available")
         
         report_lines.extend([
             "",
@@ -295,23 +340,17 @@ class RequestTracker:
             "-" * 40
         ])
         
-        for model, model_stats in stats['model_stats'].items():
-            report_lines.append(f"{model}: {model_stats['total_requests']} requests ({model_stats['success_rate']:.1f}% success)")
+        # Add model statistics if available
+        if hasattr(self, 'requests_per_model') and self.requests_per_model:
+            for model_name, count in self.requests_per_model.items():
+                success_count = self.success_per_model.get(model_name, 0)
+                model_success_rate = (success_count / count * 100) if count > 0 else 0
+                report_lines.append(f"{model_name}: {count} requests ({model_success_rate:.1f}% success)")
+        else:
+            report_lines.append("No model statistics available")
         
-        report_lines.extend([
-            "",
-            "📈 QUOTA PREDICTIONS:",
-            "-" * 40
-        ])
-        
-        for model, pred in quota_pred.items():
-            if pred['used_requests'] > 0:
-                status_emoji = "⚠️" if pred['status'] == 'warning' else "✅"
-                report_lines.append(f"{status_emoji} {model}: {pred['used_requests']}/{pred['daily_limit']} ({pred['usage_percentage']:.1f}%)")
-                if pred['estimated_hours_to_limit']:
-                    report_lines.append(f"   └─ Est. limit in: {pred['estimated_hours_to_limit']:.1f} hours")
-        
-        if detailed and len(self.current_session_requests) > 0:
+        # Add recent requests if available and detailed view requested
+        if detailed and hasattr(self, 'current_session_requests') and len(self.current_session_requests) > 0:
             report_lines.extend([
                 "",
                 "📝 RECENT REQUESTS (Last 10):",
