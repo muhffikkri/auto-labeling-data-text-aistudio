@@ -569,33 +569,19 @@ def label_dataset(df_master: pd.DataFrame, base_name: str, batch_size: int, max_
             batch_id = f"batch_{start+1}_{end}"
             
             logging.info(f"📋 Processing batch {start+1}-{end} (ID: {batch_id})")
-            
-            # Simplified filename - single file per batch
-            batch_filename = f"{base_name}_batch{start+1:03d}_{end:03d}.xlsx"
-            batch_filepath = os.path.join(output_dir_for_project, batch_filename)
-            
-            logging.info(f"📁 Batch file: {batch_filename}")
 
             # <<< SESSION TRACKING: Start batch tracking >>>
             batch_info = session_manager.start_batch(batch_id, start, end)
             logging.info(f"🚀 Session tracking started for batch {batch_id}")
 
-            # Load existing batch file if available (for resume)
-            if os.path.exists(batch_filepath):
-                batch_slice = pd.read_excel(batch_filepath)
-                logging.info(f"📂 Melanjutkan batch: {batch_filename}")
-            else:
-                # Create new batch from master dataframe
-                batch_slice = df_master.iloc[start:end].copy()
-                logging.info(f"📝 Batch baru: {batch_filename}")
+            # Get batch slice from working dataframe (single file approach)
+            batch_slice = working_df.iloc[start:end].copy()
 
             # Find rows that need labeling (label is NaN/None)
             unlabeled_in_batch = batch_slice[batch_slice['label'].isna()]
 
             # If no rows need labeling, batch is complete
             if unlabeled_in_batch.empty:
-                if not os.path.exists(batch_filepath):
-                    batch_slice.to_excel(batch_filepath, index=False)
                 logging.info(f"✅ Batch {start+1}-{end} sudah lengkap ({len(batch_slice)} items). Melewati...")
                 session_manager.end_batch(
                     batch_info, success=True, items_processed=len(batch_slice), items_failed=0
@@ -799,20 +785,24 @@ def label_dataset(df_master: pd.DataFrame, base_name: str, batch_size: int, max_
                         label_distribution = dict(label_counts)
                         logging.info(f"   📈 Distribusi label: {label_distribution}")
                     
+                    # Update working_df dengan hasil dari batch (single file approach)
                     # Siapkan kedua DataFrame dengan 'id' sebagai index
-                    batch_slice.set_index('id', inplace=True)
                     output_df.set_index('id', inplace=True)
                     
-                    # Perbarui batch_slice dengan nilai dari output_df
-                    batch_slice.update(output_df)
-                    
-                    # Kembalikan 'id' menjadi kolom biasa
-                    batch_slice.reset_index(inplace=True)
+                    # Update working_df langsung untuk baris yang diproses
+                    for idx, row in output_df.iterrows():
+                        working_df.loc[working_df['id'] == idx, 'label'] = row['label']
+                        working_df.loc[working_df['id'] == idx, 'justifikasi'] = row['justifikasi']
 
-                # Simpan SEMUA baris batch (berhasil, gagal, belum diproses)
-                batch_slice.to_excel(batch_filepath, index=False)
-                logging.info(f"   💾 File tersimpan: {batch_filepath}")
-                logging.info(f"   📊 Status: {len(batch_slice[~batch_slice['label'].isna()])} labeled / {len(batch_slice)} total rows")
+                # Save ke single output file (bukan per batch)
+                working_df.to_excel(output_filepath, index=False)
+                logging.info(f"   💾 Single file updated: {os.path.basename(output_filepath)}")
+                
+                # Calculate current progress
+                labeled_count = working_df['label'].notna().sum()
+                total_count = len(working_df)
+                progress_percent = (labeled_count / total_count * 100) if total_count > 0 else 0
+                logging.info(f"   📊 Progress: {labeled_count}/{total_count} ({progress_percent:.1f}%) completed")
                 
                 # Session tracking untuk batch sukses
                 session_manager.end_batch(
@@ -827,10 +817,15 @@ def label_dataset(df_master: pd.DataFrame, base_name: str, batch_size: int, max_
                 
             elif not token_limit_error_detected:
                 logging.warning(f"Gagal memproses {len(unlabeled_in_batch)} baris dalam batch {start+1}-{end} setelah {max_retry} percobaan.")
-                # Simpan SEMUA baris batch termasuk yang gagal untuk review manual
-                batch_slice.to_excel(batch_filepath, index=False)
-                logging.info(f"   💾 Batch tersimpan untuk review: {batch_filepath}")
-                logging.info(f"   ⚠️  Status: {len(batch_slice[~batch_slice['label'].isna()])} labeled / {len(batch_slice)} total rows (PARTIAL)")
+                # Save current state ke single output file
+                working_df.to_excel(output_filepath, index=False)
+                logging.info(f"   💾 Current progress saved: {os.path.basename(output_filepath)}")
+                
+                # Calculate current progress
+                labeled_count = working_df['label'].notna().sum()
+                total_count = len(working_df)
+                progress_percent = (labeled_count / total_count * 100) if total_count > 0 else 0
+                logging.info(f"   ⚠️  Progress: {labeled_count}/{total_count} ({progress_percent:.1f}%) - batch failed")
                 
                 # Session tracking untuk batch gagal
                 session_manager.end_batch(
@@ -843,10 +838,15 @@ def label_dataset(df_master: pd.DataFrame, base_name: str, batch_size: int, max_
                     api_key_index=current_key_index + 1
                 )
             else:
-                # Token limit error - simpan semua baris untuk review
-                batch_slice.to_excel(batch_filepath, index=False)
-                logging.info(f"   💾 Batch tersimpan (token limit): {batch_filepath}")
-                logging.info(f"   ⚠️  Status: {len(batch_slice[~batch_slice['label'].isna()])} labeled / {len(batch_slice)} total rows (TOKEN LIMIT)")
+                # Token limit error - save current state
+                working_df.to_excel(output_filepath, index=False)
+                logging.info(f"   💾 Current progress saved (token limit): {os.path.basename(output_filepath)}")
+                
+                # Calculate current progress
+                labeled_count = working_df['label'].notna().sum()
+                total_count = len(working_df)
+                progress_percent = (labeled_count / total_count * 100) if total_count > 0 else 0
+                logging.info(f"   ⚠️  Progress: {labeled_count}/{total_count} ({progress_percent:.1f}%) - token limit")
                 
                 # Token limit error
                 session_manager.end_batch(
@@ -877,10 +877,18 @@ def label_dataset(df_master: pd.DataFrame, base_name: str, batch_size: int, max_
                 logging.warning("🛑 Proses dihentikan karena semua model mencapai batas kuota harian.")
                 break
         
-        # Session completed - no auto-copy, manual review recommended
+        # Session completed - single file output
         logging.info("🏁 Semua batch telah diproses!")
-        logging.info("📁 Hasil tersimpan per batch untuk review manual.")
-        logging.info("💡 Periksa setiap file batch sebelum copy manual ke lokasi final.")
+        
+        # Final save and progress report
+        working_df.to_excel(output_filepath, index=False)
+        final_labeled = working_df['label'].notna().sum()
+        final_total = len(working_df)
+        final_percent = (final_labeled / final_total * 100) if final_total > 0 else 0
+        
+        logging.info(f"📄 Final result: {os.path.basename(output_filepath)}")
+        logging.info(f"� Final progress: {final_labeled}/{final_total} ({final_percent:.1f}%) completed")
+        logging.info("💡 All results consolidated in single output file.")
         
     except Exception as e:
         logging.error(f"❌ Error fatal dalam session: {e}")
