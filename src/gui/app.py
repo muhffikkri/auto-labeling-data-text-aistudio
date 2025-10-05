@@ -8,11 +8,13 @@ import threading
 import os
 from datetime import datetime
 import glob
+import json
 
 # Mengimpor fungsi logic, env manager, dan utils  
 from src.core_logic import process
 from src.core_logic import env_manager
-from src.core_logic import utils  
+from src.core_logic import utils
+from src.core_logic.session_manager import get_current_session  
 
 class QueueHandler(logging.Handler):
     """
@@ -69,12 +71,15 @@ class LabelingApp(tk.Tk):
         self.stop_event = threading.Event()
         self.start_time = None
         self.end_time = None
+        self.auto_refresh_job = None  # For storing after() job ID
 
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(pady=10, padx=10, fill="both", expand=True)
 
         # Membuat Frame untuk setiap Tab
         self.main_tab = ttk.Frame(self.notebook, padding="10")
+        self.token_tab = ttk.Frame(self.notebook, padding="10")  # New tab
+        self.stats_tab = ttk.Frame(self.notebook, padding="10")  # New tab
         self.results_tab = ttk.Frame(self.notebook, padding="10")
         self.chat_tab = ttk.Frame(self.notebook, padding="10")  
         self.prompt_tab = ttk.Frame(self.notebook, padding="10")
@@ -82,6 +87,8 @@ class LabelingApp(tk.Tk):
         self.help_tab = ttk.Frame(self.notebook, padding="10")
 
         self.notebook.add(self.main_tab, text='Proses Utama')
+        self.notebook.add(self.token_tab, text='Analisis Token')
+        self.notebook.add(self.stats_tab, text='Statistik Request')
         self.notebook.add(self.results_tab, text='Hasil')
         self.notebook.add(self.chat_tab, text='Chat Tester')  
         self.notebook.add(self.prompt_tab, text='Editor Prompt')
@@ -90,6 +97,8 @@ class LabelingApp(tk.Tk):
 
         # Mengisi konten setiap tab
         self.create_main_tab_widgets()
+        self.create_token_tab_widgets()
+        self.create_stats_tab_widgets()
         self.create_results_tab_widgets()
         self.create_chat_tab_widgets()  
         self.create_prompt_tab_widgets()
@@ -133,16 +142,16 @@ class LabelingApp(tk.Tk):
         text_column_entry.grid(row=1, column=1, columnspan=2, padx=5, pady=5, sticky="ew")
 
         # Input untuk Label yang Diizinkan 
-        ttk.Label(controls_frame, text="Label yang Diizinkan\n(dipisah koma):").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        ttk.Label(controls_frame, text="Label yang Diizinkan\n(dipisah koma):").grid(row=2, column=0, padx=5, pady=5, sticky="w")
         self.allowed_labels_var = tk.StringVar(value="positif, negatif, netral, tidak relevan")
         allowed_labels_entry = ttk.Entry(controls_frame, textvariable=self.allowed_labels_var)
-        allowed_labels_entry.grid(row=1, column=1, columnspan=2, padx=5, pady=5, sticky="ew")
+        allowed_labels_entry.grid(row=2, column=1, columnspan=2, padx=5, pady=5, sticky="ew")
         
         # Input Batch Size 
-        ttk.Label(controls_frame, text="Ukuran Batch:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        ttk.Label(controls_frame, text="Ukuran Batch:").grid(row=3, column=0, padx=5, pady=5, sticky="w")
         self.batch_size_var = tk.StringVar(value="50")
         batch_size_entry = ttk.Entry(controls_frame, textvariable=self.batch_size_var)
-        batch_size_entry.grid(row=2, column=1, padx=5, pady=5, sticky="w")
+        batch_size_entry.grid(row=3, column=1, padx=5, pady=5, sticky="w")
 
         # --- PERBAIKAN: Pindahkan Tombol Start/Stop ke sini ---
         # Frame untuk tombol Start dan Stop
@@ -163,6 +172,87 @@ class LabelingApp(tk.Tk):
         
         self.log_text = scrolledtext.ScrolledText(log_frame, state="disabled", wrap=tk.WORD, bg="#2b2b2b", fg="white")
         self.log_text.pack(fill=tk.BOTH, expand=True)
+
+    def create_token_tab_widgets(self):
+        """
+        Membuat widget pada tab 'Analisis Token'.
+        
+        Termasuk:
+            - Input file dataset untuk analisis
+            - Input nama kolom teks
+            - Input ukuran batch
+            - Tombol analisis
+            - Output hasil analisis token dan estimasi biaya
+        """
+        # Frame untuk input
+        input_frame = ttk.LabelFrame(self.token_tab, text="Konfigurasi Analisis Token", padding="10")
+        input_frame.pack(fill=tk.X, pady=5)
+        input_frame.columnconfigure(1, weight=1)
+        
+        # Input file dataset
+        ttk.Label(input_frame, text="File Dataset:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.token_filepath_var = tk.StringVar()
+        token_filepath_entry = ttk.Entry(input_frame, textvariable=self.token_filepath_var, state="readonly")
+        token_filepath_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        token_browse_button = ttk.Button(input_frame, text="Pilih File...", command=self.browse_token_file)
+        token_browse_button.grid(row=0, column=2, padx=5, pady=5)
+        
+        # Input nama kolom teks
+        ttk.Label(input_frame, text="Nama Kolom Teks:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        self.token_column_var = tk.StringVar(value="full_text")
+        token_column_entry = ttk.Entry(input_frame, textvariable=self.token_column_var)
+        token_column_entry.grid(row=1, column=1, columnspan=2, padx=5, pady=5, sticky="ew")
+        
+        # Input ukuran batch
+        ttk.Label(input_frame, text="Ukuran Batch:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        self.token_batch_size_var = tk.StringVar(value="100")
+        token_batch_entry = ttk.Entry(input_frame, textvariable=self.token_batch_size_var)
+        token_batch_entry.grid(row=2, column=1, padx=5, pady=5, sticky="w")
+        
+        # Tombol analisis
+        self.analyze_button = ttk.Button(input_frame, text="🔍 Analisis Token dan Biaya", command=self.start_token_analysis_thread)
+        self.analyze_button.grid(row=3, column=0, columnspan=3, pady=15, sticky="ew")
+        
+        # Frame untuk hasil
+        result_frame = ttk.LabelFrame(self.token_tab, text="Hasil Analisis", padding="10")
+        result_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        
+        self.token_result_text = scrolledtext.ScrolledText(result_frame, state="disabled", wrap=tk.WORD, bg="#f0f0f0")
+        self.token_result_text.pack(fill=tk.BOTH, expand=True)
+
+    def create_stats_tab_widgets(self):
+        """
+        Membuat widget pada tab 'Statistik Request'.
+        
+        Termasuk:
+            - Tombol refresh statistik
+            - Display statistik real-time
+            - Quota monitoring
+            - Performance metrics
+        """
+        # Frame untuk kontrol
+        control_frame = ttk.Frame(self.stats_tab)
+        control_frame.pack(fill=tk.X, pady=5)
+        
+        refresh_stats_button = ttk.Button(control_frame, text="🔄 Refresh Statistik", command=self.refresh_stats)
+        refresh_stats_button.pack(side=tk.LEFT, padx=5)
+        
+        self.auto_refresh_var = tk.BooleanVar(value=False)
+        auto_refresh_check = ttk.Checkbutton(control_frame, text="Auto-refresh (5s)", variable=self.auto_refresh_var, command=self.toggle_auto_refresh)
+        auto_refresh_check.pack(side=tk.LEFT, padx=15)
+        
+        export_stats_button = ttk.Button(control_frame, text="📊 Export Statistik", command=self.export_stats)
+        export_stats_button.pack(side=tk.RIGHT, padx=5)
+        
+        clear_stats_button = ttk.Button(control_frame, text="🗑️ Clear Stats", command=self.clear_stats)
+        clear_stats_button.pack(side=tk.RIGHT, padx=5)
+        
+        # Frame untuk statistik
+        stats_frame = ttk.LabelFrame(self.stats_tab, text="Request Statistics & Quota Monitoring", padding="10")
+        stats_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        
+        self.stats_text = scrolledtext.ScrolledText(stats_frame, state="disabled", wrap=tk.WORD, bg="#f0f0f0", font=("Consolas", 9))
+        self.stats_text.pack(fill=tk.BOTH, expand=True)
 
     def create_prompt_tab_widgets(self):
         """
@@ -295,25 +385,85 @@ Aplikasi ini dirancang untuk mempermudah proses pelabelan data teks dalam jumlah
 Panduan Cepat (Workflow)
 ===============================
 1.  Tab Pengaturan: Pastikan semua konfigurasi (nama model, direktori, API key) sudah benar. Klik "Simpan" jika Anda melakukan perubahan.
-2.  Tab Proses Utama: Klik "Pilih File..." untuk memilih dataset Anda.
-3.  Tab Proses Utama: Atur "Ukuran Batch" (jumlah baris per permintaan API). Nilai yang lebih kecil (misal: 20-50) lebih aman dari error token limit.
-4.  Klik "Mulai Proses Pelabelan".
-5.  Pantau log di Tab Proses Utama dan lihat file yang dihasilkan di Tab Hasil.
-6.  Jika perlu, klik "Hentikan Proses". Proses akan berhenti dengan aman setelah batch saat ini selesai.
+2.  Tab Analisis Token: Gunakan untuk menganalisis biaya token sebelum memulai pelabelan besar-besaran.
+3.  Tab Proses Utama: Klik "Pilih File..." untuk memilih dataset Anda.
+4.  Tab Proses Utama: Atur "Ukuran Batch" (jumlah baris per permintaan API). Nilai yang lebih kecil (misal: 20-50) lebih aman dari error token limit.
+5.  Klik "Mulai Proses Pelabelan".
+6.  Pantau log di Tab Proses Utama dan lihat file yang dihasilkan di Tab Hasil.
+7.  Tab Statistik Request: Monitor penggunaan quota dan performa API secara real-time.
+8.  Jika perlu, klik "Hentikan Proses". Proses akan berhenti dengan aman setelah batch saat ini selesai.
+
+===============================
+Fitur-Fitur Aplikasi
+===============================
+📊 Tab Analisis Token:
+-   Analisis biaya token sebelum memulai pelabelan
+-   Estimasi biaya berdasarkan ukuran batch dan dataset
+-   Request langsung ke model untuk akurasi maksimal
+
+📈 Tab Statistik Request:
+-   Monitor penggunaan quota per model dan API key
+-   Tracking success rate dan response time
+-   Prediksi kapan akan mencapai limit harian
+-   Export statistik untuk analisis lebih lanjut
+
+🤖 Tab Chat Tester:
+-   Test prompt secara langsung ke model Gemini
+-   Debugging dan fine-tuning prompt template
+
+📝 Tab Editor Prompt:
+-   Edit template prompt secara visual
+-   Save/load template dengan mudah
 
 ===============================
 Mekanisme Aplikasi
 ===============================
 -   Batching: Data Anda tidak dikirim sekaligus, melainkan dalam potongan-potongan kecil (batch) untuk efisiensi dan menghindari limit API.
+-   Model Fallback: Otomatis beralih ke model lain jika quota habis
 -   Checkpoint: Setelah setiap batch berhasil diproses, hasilnya langsung disimpan sebagai file Excel kecil. Jika aplikasi error atau ditutup, Anda bisa menjalankannya lagi tanpa kehilangan progres.
 -   Rotasi API Key: Jika Anda memasukkan lebih dari satu API key dan terjadi error kuota, aplikasi akan otomatis beralih ke key berikutnya.
+-   Request Tracking: Semua request ke API dicatat dengan detail untuk monitoring dan debugging.
 -   Logging: Semua aktivitas, peringatan, dan error dicatat di Tab Proses Utama dan juga disimpan permanen di folder `logs/`.
 
 ===============================
 Persyaratan Dataset
 ===============================
 -   Format file harus .csv atau .xlsx.
--   WAJIB memiliki kolom dengan nama persis `full_text` yang berisi teks untuk dilabeli.
+-   WAJIB memiliki kolom dengan nama yang sesuai (default: `full_text`) yang berisi teks untuk dilabeli.
+-   Pastikan tidak ada data kosong pada kolom teks yang akan diproses.
+
+===============================
+Tips Optimasi
+===============================
+🔋 Efisiensi Biaya:
+-   Gunakan Tab Analisis Token untuk estimasi biaya sebelum pelabelan besar
+-   Pilih ukuran batch optimal (50-100 untuk dataset besar)
+-   Monitor quota melalui Tab Statistik Request
+
+⚡ Performance:
+-   Gunakan model fallback list untuk throughput maksimal
+-   Monitor response time di Tab Statistik Request
+-   Auto-refresh statistics untuk monitoring real-time
+
+🛡️ Reliability:
+-   Setup multiple API keys untuk redundancy
+-   Gunakan checkpoint system untuk resume otomatis
+-   Monitor error rate melalui statistik
+
+===============================
+Troubleshooting
+===============================
+❌ Error Token Limit:
+-   Kurangi ukuran batch
+-   Cek Tab Analisis Token untuk estimasi yang akurat
+
+❌ Error Quota:
+-   Cek Tab Statistik Request untuk melihat penggunaan
+-   Tambah API key atau gunakan model fallback
+
+❌ Error Dataset:
+-   Pastikan nama kolom sesuai
+-   Cek format file (CSV/XLSX only)
 """
         help_frame = ttk.Frame(self.help_tab, padding="10")
         help_frame.pack(fill=tk.BOTH, expand=True)
@@ -601,3 +751,225 @@ Persyaratan Dataset
                 filesize_kb = round(os.path.getsize(f) / 1024, 2)
                 category = os.path.basename(os.path.dirname(f)) if subdir else "Final"
                 self.results_tree.insert("", "end", values=(filename, category.capitalize(), f"{filesize_kb} KB"))
+
+    def browse_token_file(self):
+        """Membuka file dialog untuk memilih dataset untuk analisis token."""
+        filepath = filedialog.askopenfilename(
+            title="Pilih file dataset untuk analisis token", 
+            filetypes=[("All supported", "*.csv *.xlsx"), ("CSV files", "*.csv"), ("Excel files", "*.xlsx")]
+        )
+        if filepath:
+            self.token_filepath_var.set(filepath)
+
+    def start_token_analysis_thread(self):
+        """Memulai thread baru untuk analisis token."""
+        filepath = self.token_filepath_var.get()
+        if not filepath:
+            messagebox.showerror("Error", "Silakan pilih file dataset terlebih dahulu.")
+            return
+        
+        try:
+            batch_size = int(self.token_batch_size_var.get())
+            if batch_size <= 0:
+                raise ValueError("Batch size harus lebih dari 0")
+        except ValueError as e:
+            messagebox.showerror("Error", f"Ukuran batch tidak valid: {e}")
+            return
+
+        column_name = self.token_column_var.get().strip()
+        if not column_name:
+            messagebox.showerror("Error", "Nama kolom teks tidak boleh kosong.")
+            return
+
+        # Disable button dan show loading
+        self.analyze_button.config(state="disabled", text="🔄 Menganalisis...")
+        self.token_result_text.config(state="normal")
+        self.token_result_text.delete("1.0", tk.END)
+        self.token_result_text.insert("1.0", "⏳ Sedang menganalisis token dan estimasi biaya...\nHarap tunggu...")
+        self.token_result_text.config(state="disabled")
+
+        # Start thread
+        threading.Thread(
+            target=self.run_token_analysis,
+            args=(filepath, column_name, batch_size),
+            daemon=True
+        ).start()
+
+    def run_token_analysis(self, filepath, column_name, batch_size):
+        """Worker untuk menjalankan analisis token di background."""
+        try:
+            # Import check_tokens functionality
+            from src.core_logic import check_tokens
+            
+            # Get base filename
+            base_filename = os.path.splitext(os.path.basename(filepath))[0]
+            dataset_dir = os.path.dirname(filepath)
+            
+            # Setup API
+            model_name = check_tokens.setup_gemini_api()
+            
+            # Load dataset
+            df, _ = check_tokens.open_dataset(dataset_dir, base_filename)
+            
+            # Validate column exists
+            if column_name not in df.columns:
+                raise ValueError(f"Kolom '{column_name}' tidak ditemukan dalam dataset.\\nKolom yang tersedia: {', '.join(df.columns)}")
+            
+            # Create sample and analyze
+            sample_df = df.head(min(batch_size, len(df)))
+            sample_prompt = check_tokens.create_sample_prompt(sample_df, column_name)
+            
+            # Calculate metrics
+            import google.generativeai as genai
+            model = genai.GenerativeModel(model_name)
+            metrics = check_tokens.calculate_token_metrics(model, sample_prompt, len(df), batch_size)
+            
+            # Generate report
+            report = check_tokens.generate_token_report(
+                dataset_name=base_filename,
+                column_name=column_name,
+                total_rows=len(df),
+                sample_rows=min(batch_size, len(df)),
+                model_name=model_name,
+                batch_size=batch_size,
+                metrics=metrics
+            )
+            
+            # Update GUI dengan hasil
+            self.token_result_text.config(state="normal")
+            self.token_result_text.delete("1.0", tk.END)
+            self.token_result_text.insert("1.0", report)
+            self.token_result_text.config(state="disabled")
+            
+        except Exception as e:
+            error_msg = f"❌ Error dalam analisis token:\\n\\n{str(e)}\\n\\nPastikan:\\n• File dataset valid\\n• Kolom '{column_name}' ada dalam dataset\\n• API key tersedia di pengaturan"
+            self.token_result_text.config(state="normal")
+            self.token_result_text.delete("1.0", tk.END)
+            self.token_result_text.insert("1.0", error_msg)
+            self.token_result_text.config(state="disabled")
+            messagebox.showerror("Error Analisis Token", str(e))
+        finally:
+            # Re-enable button
+            self.analyze_button.config(state="normal", text="🔍 Analisis Token dan Biaya")
+
+    def refresh_stats(self):
+        """Refresh dan tampilkan statistik request terbaru."""
+        try:
+            from src.core_logic.request_tracker import get_request_tracker
+            
+            tracker = get_request_tracker()
+            
+            # Check if there are any requests with safety check
+            if not tracker or tracker.total_requests == 0:
+                stats_content = """📭 Belum ada request yang tercatat.
+
+💡 Statistik akan muncul setelah Anda:
+   • Menjalankan analisis token
+   • Memulai proses pelabelan 
+   • Menggunakan chat tester
+
+🚀 Mulai gunakan aplikasi untuk melihat statistik detail di sini!"""
+            else:
+                try:
+                    # Generate comprehensive report with safety
+                    stats_content = tracker.generate_report(detailed=True)
+                except Exception as report_error:
+                    stats_content = f"❌ Error generating report: {report_error}\n\nBasic info: {tracker.total_requests} requests tracked"
+            
+            # Update display with safety
+            try:
+                self.stats_text.config(state="normal")
+                self.stats_text.delete("1.0", tk.END)
+                self.stats_text.insert("1.0", stats_content)
+                self.stats_text.config(state="disabled")
+            except Exception as display_error:
+                print(f"Error updating stats display: {display_error}")
+            
+        except Exception as e:
+            try:
+                error_msg = f"❌ Error mengambil statistik: {str(e)}"
+                self.stats_text.config(state="normal")
+                self.stats_text.delete("1.0", tk.END)
+                self.stats_text.insert("1.0", error_msg)
+                self.stats_text.config(state="disabled")
+            except:
+                print(f"Critical error in refresh_stats: {e}")
+
+    def toggle_auto_refresh(self):
+        """Toggle auto-refresh mode untuk statistik."""
+        try:
+            if self.auto_refresh_var.get():
+                self.auto_refresh_stats()
+        except Exception as e:
+            print(f"Error in toggle_auto_refresh: {e}")
+        
+    def auto_refresh_stats(self):
+        """Auto refresh statistik setiap 5 detik jika diaktifkan."""
+        try:
+            if self.auto_refresh_var.get():
+                self.refresh_stats()
+                # Schedule next refresh in 5 seconds
+                self.after(5000, self.auto_refresh_stats)
+        except Exception as e:
+            print(f"Error in auto_refresh_stats: {e}")
+            # Stop auto refresh on error
+            if hasattr(self, 'auto_refresh_var'):
+                self.auto_refresh_var.set(False)
+        if self.auto_refresh_var.get():
+            self.refresh_stats()
+            # Schedule next refresh in 5 seconds
+            self.after(5000, self.auto_refresh_stats)
+
+    def export_stats(self):
+        """Export statistik ke file."""
+        try:
+            from src.core_logic.request_tracker import get_request_tracker
+            from datetime import datetime
+            
+            tracker = get_request_tracker()
+            
+            if tracker.total_requests == 0:
+                messagebox.showinfo("Info", "Belum ada statistik untuk di-export.")
+                return
+            
+            # Generate filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"request_stats_export_{timestamp}.txt"
+            
+            # Ask user for save location
+            filepath = filedialog.asksaveasfilename(
+                title="Export Statistik Request",
+                defaultextension=".txt",
+                initialvalue=filename,
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+            )
+            
+            if filepath:
+                report = tracker.generate_report(detailed=True)
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(report)
+                messagebox.showinfo("Berhasil", f"Statistik berhasil di-export ke:\\n{filepath}")
+                
+        except Exception as e:
+            messagebox.showerror("Error Export", f"Gagal export statistik: {str(e)}")
+
+    def clear_stats(self):
+        """Clear semua statistik yang tersimpan."""
+        result = messagebox.askyesno(
+            "Konfirmasi", 
+            "Apakah Anda yakin ingin menghapus semua statistik request?\\n\\nTindakan ini tidak dapat dibatalkan.",
+            icon="warning"
+        )
+        
+        if result:
+            try:
+                import os
+                stats_file = "logs/request_stats.json"
+                if os.path.exists(stats_file):
+                    os.remove(stats_file)
+                    messagebox.showinfo("Berhasil", "Statistik request berhasil dihapus.")
+                    self.refresh_stats()  # Refresh display
+                else:
+                    messagebox.showinfo("Info", "Tidak ada file statistik yang ditemukan.")
+            except Exception as e:
+                messagebox.showerror("Error", f"Gagal menghapus statistik: {str(e)}")

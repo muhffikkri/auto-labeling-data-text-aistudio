@@ -194,3 +194,7 @@ results/*
 
 # Kecualikan file percobaan
 !datasets/data_sample/
+
+# Logs - keep folder but ignore contents
+logs/*
+!logs/.gitkeep

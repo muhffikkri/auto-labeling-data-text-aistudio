@@ -96,21 +96,96 @@ Kualitas pelabelan bergantung sepenuhnya pada prompt Anda di **Tab `Editor Promp
 │   ├── core_logic/
 │   │   ├── env_manager.py
 │   │   ├── process.py
-│   │   └── utils.py
+│   │   ├── utils.py
+│   │   ├── check_tokens.py      # Token analysis tool
+│   │   └── list_models.py       # Model information tool
 │   └── gui/
 │       └── app.py
 ├── dataset/
 │   └── data_sample/
 ├── results/
 ├── logs/
+├── tests/                       # Testing framework
+│   ├── unit/
+│   ├── integration/
+│   └── conftest.py
 ├── main.py
+├── tools.py                     # Utilities wrapper
 ├── start.bat
 ├── start.sh
 ├── .env
 ├── .env.example
+├── env_example_fallback.txt     # Model fallback config example
 ├── prompt_template.txt
-└── requirements.txt
+├── requirements.txt
+└── requirements-dev.txt         # Development dependencies
 ```
+
+---
+
+## 🔧 Utilitas & Tools
+
+Proyek ini dilengkapi dengan beberapa tool utilitas untuk analisis dan perencanaan:
+
+### 1. Token Analysis Tool
+
+Analisis jumlah token dan estimasi biaya sebelum menjalankan proses pelabelan:
+
+```bash
+# Analisis dataset dengan tool wrapper
+python tools.py check-tokens --dataset my_tweets --column tweet_text --batch-size 300
+
+# Atau langsung dengan module
+python -m src.core_logic.check_tokens --dataset my_tweets --column tweet_text
+```
+
+**Output:**
+
+- Total token input per batch
+- Estimasi biaya berdasarkan model
+- Proyeksi biaya untuk seluruh dataset
+- Rekomendasi batch size
+
+### 2. Model Information Tool
+
+Lihat daftar model Gemini yang tersedia dan informasi quota:
+
+```bash
+# Daftar model ringkas
+python tools.py list-models
+
+# Detail lengkap setiap model
+python tools.py list-models --show-details
+
+# Generate konfigurasi model fallback
+python tools.py list-models --generate-config
+
+# Cek akses ke model (perlu API key)
+python tools.py list-models --check-access
+```
+
+**Output:**
+
+- Daftar model dengan quota (RPM/TPM/RPD)
+- Rekomendasi pemilihan model
+- Konfigurasi fallback yang optimal
+- Status akses untuk setiap model
+
+### 3. Model Fallback System
+
+Sistem fallback otomatis untuk memaksimalkan throughput harian:
+
+```bash
+# Setup di file .env
+MODEL_FALLBACK_LIST="gemini-2.5-pro,gemini-2.5-flash,gemini-2.5-flash-lite"
+```
+
+**Fitur:**
+
+- Otomatis beralih model ketika quota habis
+- Start dengan model terbaik, fallback ke alternatif
+- Zero downtime switching
+- Comprehensive logging
 
 ---
 

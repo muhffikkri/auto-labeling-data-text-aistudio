@@ -42,38 +42,43 @@ Aturan Emas untuk Mengatasi Ambiguitas
 1. Fokus Utama: Tanyakan, "Apakah tweet ini relevan dengan universitas tertentu dan menyampaikan emosi positif, negatif, atau informasi netral? Apakah ada indikasi buzzer?" Jika tidak ada kaitan dengan universitas, labeli sebagai TIDAK RELEVAN.
 2. Spesifik vs. Umum: Pilih kategori yang paling sesuai berdasarkan isi dan relevansi tweet. Jika tweet mengandung sentimen tetapi tidak relevan dengan universitas (misal, "Pelayanan buruk banget!" tanpa menyebut kampus), klasifikasikan sebagai TIDAK RELEVAN. Tandai pola buzzer jika terdeteksi.
 
-Contoh Tambahan untuk Klarifikasi
-1. Tweet: "Selamat buat [Nama Kampus] atas akreditasi A, bikin bangga alumni! #KampusTerbaik"
-- Label: POSITIF
-- Justifikasi: Tweet mengandung ucapan selamat dan ekspresi kebanggaan terkait [Nama Kampus]. Catatan: TERINDIKASI BUZZER karena hashtag promosi.
-2. Tweet: "Sistem pendaftaran [Nama Kampus] error lagi, parah!"
-- Label: NEGATIF
-- Justifikasi: Tweet mengeluhkan masalah teknis [Nama Kampus] dengan nada kecewa. 
-3. Tweet: "Jadwal kuliah [Nama Kampus] sudah diumumkan di situs resmi."
-- Label: NETRAL
-- Justifikasi: Tweet hanya menyampaikan informasi tanpa emosi atau penilaian, relevan dengan [Nama Kampus]. 
-4. Tweet: "Acara seru, tapi parkirannya chaos."
-- Label: TIDAK RELEVAN
-- Justifikasi: Tweet mengandung sentimen positif dan negatif tetapi tidak menyebut universitas tertentu. 
-5. Tweet: "Apa kabar mahasiswa baru [Nama Kampus]?"
-- Label: NETRAL
-- Justifikasi: Tweet berupa pertanyaan tanpa ekspresi emosi, relevan dengan [Nama Kampus]. 
-6. Tweet: "Gabung [Nama Kampus], universitas nomor satu di Indonesia! #KampusTerbaik"
-- Label: POSITIF
-- Justifikasi: Tweet memuji [Nama Kampus] dengan nada promosi. Catatan: TERINDIKASI BUZZER karena penggunaan hashtag promosi dan nada tidak alami.
+--- INSTRUKSI INPUT DAN FORMAT OUTPUT JSON ---
 
-Catatan Tambahan
-- Konteks X: Tweet sering pendek, informal, dan dapat mengandung sarkasme, meme, atau hashtag. Perhatikan konteks ini untuk menentukan sentimen, relevansi, dan indikasi buzzer.
-- Ambiguitas: Jika tweet ambigu (misal, relevansinya tidak jelas, sentimennya tidak tegas, atau ada indikasi buzzer), pilih kategori berdasarkan fokus utama dan jelaskan ambiguitas di justifikasi.
-- Referensi Eksternal: Jika diperlukan, gunakan sumber resmi seperti situs universitas atau Indonesia.go.id untuk memverifikasi fakta, atau analisis profil X untuk mendeteksi pola buzzer (misal, frekuensi posting atau interaksi akun).
+Anda akan menerima data dalam format sebuah array JSON. Setiap objek dalam array berisi "id" (nomor identifikasi unik) dan "text" (isi tweet).
 
-Output yang Diinginkan
-Untuk setiap tweet, berikan:
-LABEL KATEGORI - Justifikasi [Alasan singkat untuk label. Catatan: TERINDIKASI BUZZER jika ada pola promosi, hashtag berlebihan, atau aktivitas mencurigakan].
-Contoh:
-1. POSITIF - Tweet memuji akreditasi [Nama Kampus] dengan nada bangga. 
-Output HARUS berjumlah sesuai urutan input. Hanya tulis label dan justifikasi (dengan - sebagai pemisah) saja per baris tanpa tambahan teks lain.
+Tugas Anda adalah menghasilkan sebuah array JSON sebagai output. Array ini harus berisi satu objek JSON untuk setiap tweet yang Anda proses. Setiap objek HARUS memiliki tiga kunci (keys):
+1.  "id": (Integer) Gunakan "id" yang sama persis dari tweet input untuk mencocokkan.
+2.  "label": (String) Harus salah satu dari empat nilai yang diizinkan: "POSITIF", "NEGATIF", "NETRAL", "TIDAK RELEVAN".
+3.  "justifikasi": (String) Berikan alasan singkat untuk label yang Anda berikan. Jika Anda mendeteksi indikasi buzzer, tambahkan catatan "Catatan: TERINDIKASI BUZZER" di akhir justifikasi ini.
 
-Teks:
+Contoh Format Input dan Output:
+Jika Anda menerima input JSON seperti ini:
+[
+  { "id": 101, "text": "Selamat buat [Nama Kampus] atas akreditasi A, bikin bangga alumni! #KampusTerbaik" },
+  { "id": 102, "text": "Sistem pendaftaran [Nama Kampus] error lagi, parah!" },
+  { "id": 103, "text": "Acara seru, tapi parkirannya chaos." }
+]
 
+Maka, output Anda HARUS berupa JSON valid seperti ini:
+[
+  {
+    "id": 101,
+    "label": "POSITIF",
+    "justifikasi": "Tweet mengandung ucapan selamat dan ekspresi kebanggaan terkait [Nama Kampus]. Catatan: TERINDIKASI BUZZER karena hashtag promosi."
+  },
+  {
+    "id": 102,
+    "label": "NEGATIF",
+    "justifikasi": "Tweet mengeluhkan masalah teknis [Nama Kampus] dengan nada kecewa."
+  },
+  {
+    "id": 103,
+    "label": "TIDAK RELEVAN",
+    "justifikasi": "Tweet mengandung sentimen positif dan negatif tetapi tidak menyebut universitas tertentu."
+  }
+]
 
+Pastikan output Anda adalah JSON yang valid dan tidak ada teks lain di luar array JSON tersebut.
+
+Data Tweet (dalam format JSON):
+{data_json}
